@@ -101,7 +101,7 @@ databaseOpen = database_open
 databaseVersion :: Database -> IO Int
 databaseVersion = database_get_version
 
-query :: Database -> Search -> IO Query
+query :: Database -> SearchTerm -> IO Query
 query db = query_create db . show
 
 queryCountMessages :: Query -> IO Int

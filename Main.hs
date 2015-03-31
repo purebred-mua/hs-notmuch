@@ -26,7 +26,7 @@ main = do
       putStrLn "END"
 
 tagQuery :: Database -> Tag -> IO Query
-tagQuery db tag = query db (Term (Tag tag))
+tagQuery db tag = query db (Tag tag)
 
 printQueryInfo :: Query -> IO ()
 printQueryInfo q = do

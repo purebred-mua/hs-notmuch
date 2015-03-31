@@ -15,6 +15,10 @@ data SearchTerm
   | Path String -- <directory-path>  ...  FilePath?
   | Date String String -- <since>..<until>
   | Asterisk
+  | And SearchTerm SearchTerm
+  | Or SearchTerm SearchTerm
+  | Xor SearchTerm SearchTerm
+  | Not SearchTerm
 
 instance Show SearchTerm where
   show (FreeForm s) = s -- TODO quote
@@ -29,16 +33,6 @@ instance Show SearchTerm where
   show (Path s) = "path:" ++ s
   show (Date t u) = "date:" ++ t ++ ".." ++ u
   show Asterisk = "*"
-
-data Search
-  = Term SearchTerm
-  | And Search Search
-  | Or Search Search
-  | Xor Search Search
-  | Not Search
-
-instance Show Search where
-  show (Term a)   = show a
   show (And a b)  = "( " ++ show a ++ " and " ++ show b ++ " )"
   show (Or a b)   = "( " ++ show a ++  " or " ++ show b ++ " )"
   show (Xor a b)  = "( " ++ show a ++ " xor " ++ show b ++ " )"
