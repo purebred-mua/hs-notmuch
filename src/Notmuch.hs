@@ -26,11 +26,14 @@ module Notmuch
 
   , Query
   , query
+  , queryCountMessages
+  , queryCountThreads
 
   , Thread
 
   , Message
   , messageId
+  , messageHeader
 
   , HasTags(..)
   , HasMessages(..)
@@ -38,6 +41,7 @@ module Notmuch
   ) where
 
 import Notmuch.Binding
+import Notmuch.Search
 
 --
 -- PUBLIC API
@@ -97,8 +101,17 @@ databaseOpen = database_open
 databaseVersion :: Database -> IO Int
 databaseVersion = database_get_version
 
-query :: Database -> String -> IO Query
-query = query_create
+query :: Database -> Search -> IO Query
+query db = query_create db . show
+
+queryCountMessages :: Query -> IO Int
+queryCountMessages = query_count_messages
+
+queryCountThreads :: Query -> IO Int
+queryCountThreads = query_count_threads
 
 messageId :: Message -> IO String
 messageId = message_get_message_id
+
+messageHeader :: String -> Message -> IO String
+messageHeader = flip message_get_header

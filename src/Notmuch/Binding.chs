@@ -23,9 +23,11 @@ import Control.Monad
 #include <notmuch.h>
 {#context prefix = "notmuch" #}
 
-import Foreign hiding (unsafePerformIO)
+import Foreign
 import Foreign.C
-import System.IO.Unsafe
+import qualified System.IO.Unsafe
+
+import Notmuch.Talloc
 
 
 --
@@ -54,17 +56,16 @@ type ThreadId = String
 {#pointer *filenames_t as Filenames foreign newtype #}
 
 instance Show Status where
-  show a = unsafePerformIO $
+  show a = System.IO.Unsafe.unsafePerformIO $
     {#call status_to_string #} (fromIntegral $ fromEnum a) >>= peekCString
 
 -- | Open a Notmuch database
 --
--- The database will be destroyed by the garbage collector when it
--- is no longer needed.
+-- The database has no finaliser and will remain open even if GC'd.
 --
 database_open :: String -> IO (Either Status Database)
 database_open s = withCString s $ \s' ->
-  construct Database ({#call database_open #} s' 0) database_destroy
+  construct Database ({#call database_open #} s' 0) Nothing
 
 -- notmuch_status_t notmuch_database_compact(path, backup_path, status_cb, closure)
 
@@ -115,6 +116,7 @@ database_find_message_by_filename db s =
 database_get_all_tags :: Database -> IO [Tag]
 database_get_all_tags ptr = withDatabase ptr $ \ptr' ->
   {#call database_get_all_tags #} ptr'
+    >>= detachPtr
     >>= newForeignPtr tags_destroy
     >>= tagsToList . Tags
 
@@ -123,6 +125,7 @@ query_create :: Database -> String -> IO Query
 query_create db s = withCString s $ \s' ->
   withDatabase db $ \db' ->
     {#call notmuch_query_create #} db' s'
+      >>= detachPtr
       >>= fmap Query . newForeignPtr query_destroy
 
 query_get_query_string :: Query -> IO String
@@ -146,17 +149,24 @@ query_add_tag_exclude ptr s =
 query_search_threads :: Query -> IO [Thread]
 query_search_threads ptr = withQuery ptr $ \ptr' ->
   {#call query_search_threads #} ptr'
+     >>= detachPtr
      >>= newForeignPtr threads_destroy
      >>= threadsToList . Threads
 
 query_search_messages :: Query -> IO [Message]
 query_search_messages ptr = withQuery ptr $ \ptr' ->
   {#call query_search_messages #} ptr'
+    >>= detachPtr
     >>= newForeignPtr messages_destroy
     >>= messagesToList . Messages
 
--- notmuch_query_count_messages
--- notmuch_query_count_threads
+query_count_messages :: Query -> IO Int
+query_count_messages query =
+  fromIntegral <$> withQuery query {#call query_count_messages #}
+
+query_count_threads :: Query -> IO Int
+query_count_threads query =
+  fromIntegral <$> withQuery query {#call query_count_threads #}
 
 thread_get_thread_id :: Thread -> IO ThreadId
 thread_get_thread_id ptr =
@@ -168,6 +178,7 @@ thread_get_thread_id ptr =
 thread_get_messages :: Thread -> IO [Message]
 thread_get_messages ptr = withThread ptr $ \ptr' ->
   {#call thread_get_messages #} ptr'
+    >>= detachPtr
     >>= newForeignPtr messages_destroy
     >>= messagesToList . Messages
 
@@ -180,12 +191,14 @@ thread_get_messages ptr = withThread ptr $ \ptr' ->
 thread_get_tags :: Thread -> IO [Tag]
 thread_get_tags ptr = withThread ptr $ \ptr' ->
   {#call thread_get_tags #} ptr'
+    >>= detachPtr
     >>= newForeignPtr tags_destroy
     >>= tagsToList . Tags
 
 messages_collect_tags :: Messages -> IO [Tag]
 messages_collect_tags ptr = withMessages ptr $ \ptr' ->
   {#call messages_collect_tags #} ptr'
+    >>= detachPtr
     >>= newForeignPtr tags_destroy
     >>= tagsToList . Tags
 
@@ -200,6 +213,7 @@ message_get_thread_id ptr =
 message_get_replies :: Message -> IO [Message]
 message_get_replies ptr = withMessage ptr $ \ptr' ->
   {#call message_get_replies #} ptr'
+    >>= detachPtr
     >>= newForeignPtr messages_destroy
     >>= messagesToList . Messages
 
@@ -228,6 +242,7 @@ message_get_header ptr s =
 message_get_tags :: Message -> IO [Tag]
 message_get_tags ptr = withMessage ptr $ \ptr' ->
   {#call message_get_tags #} ptr'
+    >>= detachPtr
     >>= newForeignPtr tags_destroy
     >>= tagsToList . Tags
 
@@ -283,14 +298,15 @@ construct
   -- ^ Haskell data constructor
   -> (Ptr (Ptr p) -> IO CInt)
   -- ^ C double-pointer-style constructor
-  -> FinalizerPtr p
-  -- ^ Destructor function pointer
+  -> Maybe (FinalizerPtr p)
+  -- ^ Optional destructor
   -> IO (Either Status p)
 construct dcon constructor destructor =
-  alloca $ \ptr -> do
+  let f = maybe newForeignPtr_ newForeignPtr destructor
+  in alloca $ \ptr -> do
     status <- (toEnum . fromIntegral) <$> constructor ptr
     if status == StatusSuccess
-      then fmap (Right . dcon) $ peek ptr >>= newForeignPtr destructor
+      then fmap (Right . dcon) $ f =<< peek ptr
       else return $ Left status
 
 -- | Receive an object into a pointer, handling nonzero status and null.
@@ -316,7 +332,7 @@ constructMaybe dcon constructor destructor =
 --
 ptrToList
   :: (p -> (Ptr p -> IO [b]) -> IO [b])
-  -- ^ Pointer unwrapper function (e.g. `withDatabase`)
+  -- ^ Pointer unwrapper function (e.g. `withMessages`)
   -> (Ptr p -> IO (CInt))
   -- ^ Predicate on iterator
   -> (Ptr p -> IO a)
@@ -349,7 +365,7 @@ threadsToList = ptrToList
   {#call threads_valid #}
   {#call threads_get #}
   {#call threads_move_to_next #}
-  (fmap Thread . newForeignPtr thread_destroy)
+  (fmap Thread . newForeignPtr thread_destroy <=< detachPtr)
 
 messagesToList :: Messages -> IO [Message]
 messagesToList = ptrToList
@@ -357,4 +373,4 @@ messagesToList = ptrToList
   {#call messages_valid #}
   {#call messages_get #}
   {#call messages_move_to_next #}
-  (fmap Message . newForeignPtr message_destroy)
+  (fmap Message . newForeignPtr message_destroy <=< detachPtr)
