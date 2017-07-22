@@ -113,5 +113,7 @@ queryCountThreads = query_count_threads
 messageId :: Message -> IO String
 messageId = message_get_message_id
 
-messageHeader :: String -> Message -> IO String
+-- returns EMPTY STRING on missing header,
+-- NOTHING on error (I know, confusing)
+messageHeader :: String -> Message -> IO (Maybe String)
 messageHeader = flip message_get_header

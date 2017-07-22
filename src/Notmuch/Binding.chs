@@ -233,11 +233,16 @@ message_set_flag ptr flag v = withMessage ptr $ \ptr' ->
 
 -- notmuch_message_get_date -> time_t
 
-message_get_header :: Message -> String -> IO String
+-- returns EMPTY STRING on missing header,
+-- NOTHING on error (I know, confusing)
+message_get_header :: Message -> String -> IO (Maybe String)
 message_get_header ptr s =
   withCString s $ \s' ->
-    withMessage ptr $ \ptr' ->
-      {#call message_get_header #} ptr' s' >>= peekCString
+    withMessage ptr $ \ptr' -> do
+      r <- {#call message_get_header #} ptr' s'
+      if r == nullPtr
+        then pure Nothing
+        else Just <$> peekCString r
 
 message_get_tags :: Message -> IO [Tag]
 message_get_tags ptr = withMessage ptr $ \ptr' ->
