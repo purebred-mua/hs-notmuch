@@ -344,12 +344,13 @@ ptrToList
   -> p
   -- ^ Pointer
   -> IO [b]
-ptrToList withPtr p get next f ptr = withPtr ptr $ \ptr' ->
-  p ptr' >>= \valid -> if valid == 0
+ptrToList withFObj test get next f fObj = withFObj fObj ptrToList'
+  where
+  ptrToList' ptr = test ptr >>= \valid -> if valid == 0
     then return []
     else liftM2 (:)
-      (get ptr' >>= f >>= \x -> next ptr' >> return x)
-      (ptrToList withPtr p get next f ptr)
+      (get ptr >>= f >>= \x -> next ptr >> pure x)
+      (ptrToList' ptr)
 
 tagsToList :: Tags -> IO [String]
 tagsToList = ptrToList
