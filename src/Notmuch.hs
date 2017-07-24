@@ -34,6 +34,7 @@ module Notmuch
   , Message
   , messageId
   , messageHeader
+  , messageFilename
 
   , HasTags(..)
   , HasMessages(..)
@@ -117,3 +118,6 @@ messageId = message_get_message_id
 -- NOTHING on error (I know, confusing)
 messageHeader :: String -> Message -> IO (Maybe String)
 messageHeader = flip message_get_header
+
+messageFilename :: Message -> IO String
+messageFilename = message_get_filename
