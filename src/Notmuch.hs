@@ -1,5 +1,5 @@
 -- This file is part of hs-notmuch - Haskell Notmuch binding
--- Copyright (C) 2014  Fraser Tweedale
+-- Copyright (C) 2014, 2017  Fraser Tweedale
 --
 -- hs-notmuch is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License as published by
@@ -14,6 +14,36 @@
 -- You should have received a copy of the GNU General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+{-|
+
+High-level interface to the /notmuch/ mail indexer.
+
+Some functions that operate on 'Message' objects cause a file
+descriptor to be opened (indicated below).  The file descriptor is
+automatically closed when the data gets GC'd but when the RTS is
+using a multi-generation collector (the default) it becomes more
+likely to hit /max open files/ limits.  Approaches to avoid this
+scenario include:
+
+- Avoid using these functions; if you need to open the mail file
+  from Haskell and close it promptly.
+
+- Use a single-generation collector (build with @-rtsopts@ and run
+  with @+RTS -G1@).  This incurs the cost of scanning the entire
+  heap on every GC run.
+
+- In an interactive program, build with @-threaded@ to enable
+  parallel GC.  By default, major GC will be triggered when the
+  program is idle for a certain time.
+
+- Manually execute 'System.Mem.performMajorGC' at appropriate times
+  to ensure that older generations get cleaned up.
+
+The functions that may open file descriptors are:
+
+- 'messageHeader'
+
+-}
 module Notmuch
   (
     Tag
@@ -114,8 +144,11 @@ queryCountThreads = query_count_threads
 messageId :: Message -> IO String
 messageId = message_get_message_id
 
--- returns EMPTY STRING on missing header,
--- NOTHING on error (I know, confusing)
+-- | Get the named header.  Empty string if header is
+-- missing or 'Nothing' on error.
+--
+-- /May open a file descriptor./
+--
 messageHeader :: String -> Message -> IO (Maybe String)
 messageHeader = flip message_get_header
 
