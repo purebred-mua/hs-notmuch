@@ -25,8 +25,8 @@ using a multi-generation collector (the default) it becomes more
 likely to hit /max open files/ limits.  Approaches to avoid this
 scenario include:
 
-- Avoid using these functions; if you need to open the mail file
-  from Haskell and close it promptly.
+- Avoid using these functions; if you need to open the mail file,
+  open it from Haskell, do the thing, then close it promptly.
 
 - Use a single-generation collector (build with @-rtsopts@ and run
   with @+RTS -G1@).  This incurs the cost of scanning the entire
