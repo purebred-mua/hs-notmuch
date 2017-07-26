@@ -160,5 +160,5 @@ messageDate = fmap (posixSecondsToUTCTime . realToFrac) . message_get_date
 messageHeader :: String -> Message -> IO (Maybe String)
 messageHeader = flip message_get_header
 
-messageFilename :: Message -> IO String
+messageFilename :: Message -> IO FilePath
 messageFilename = message_get_filename
