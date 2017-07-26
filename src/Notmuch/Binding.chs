@@ -1,4 +1,4 @@
--- Copyright (C) 2014  Fraser Tweedale
+-- Copyright (C) 2014, 2017  Fraser Tweedale
 --
 -- hs-notmuch is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License as published by
@@ -231,7 +231,8 @@ message_set_flag :: Message -> MessageFlag -> Bool -> IO ()
 message_set_flag ptr flag v = withMessage ptr $ \ptr' ->
   {#call message_set_flag #} ptr' (enumToCInt flag) (enumToCInt v)
 
--- notmuch_message_get_date -> time_t
+message_get_date :: Message -> IO CLong
+message_get_date = flip withMessage {#call message_get_date #}
 
 -- returns EMPTY STRING on missing header,
 -- NOTHING on error (I know, confusing)

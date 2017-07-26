@@ -63,6 +63,7 @@ module Notmuch
 
   , Message
   , messageId
+  , messageDate
   , messageHeader
   , messageFilename
 
@@ -70,6 +71,9 @@ module Notmuch
   , HasMessages(..)
   , HasThreads(..)
   ) where
+
+import Data.Time (UTCTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 
 import Notmuch.Binding
 import Notmuch.Search
@@ -143,6 +147,9 @@ queryCountThreads = query_count_threads
 
 messageId :: Message -> IO String
 messageId = message_get_message_id
+
+messageDate :: Message -> IO (UTCTime)
+messageDate = fmap (posixSecondsToUTCTime . realToFrac) . message_get_date
 
 -- | Get the named header.  Empty string if header is
 -- missing or 'Nothing' on error.

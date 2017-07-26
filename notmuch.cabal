@@ -26,6 +26,7 @@ library
 
   build-depends:
     base >=4.6 && <5
+    , time
 
   build-tools:
     c2hs >= 0.15
