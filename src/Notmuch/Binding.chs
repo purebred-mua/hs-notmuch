@@ -204,9 +204,9 @@ messages_collect_tags ptr = withMessages ptr $ \ptr' ->
     >>= newForeignPtr tags_destroy
     >>= tagsToList . Tags
 
-message_get_message_id :: Message -> IO String
+message_get_message_id :: Message -> IO B.ByteString
 message_get_message_id ptr =
-  withMessage ptr ({#call message_get_message_id #} >=> peekCString)
+  withMessage ptr ({#call message_get_message_id #} >=> B.packCString)
 
 message_get_thread_id :: Message -> IO ThreadId
 message_get_thread_id ptr =

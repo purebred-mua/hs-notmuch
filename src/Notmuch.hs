@@ -147,7 +147,7 @@ queryCountMessages = query_count_messages
 queryCountThreads :: Query -> IO Int
 queryCountThreads = query_count_threads
 
-messageId :: Message -> IO String
+messageId :: Message -> IO B.ByteString
 messageId = message_get_message_id
 
 messageDate :: Message -> IO (UTCTime)
