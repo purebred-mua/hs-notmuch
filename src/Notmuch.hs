@@ -131,7 +131,7 @@ instance HasThread Message where
   threadId = message_get_thread_id
 
 
-databaseOpen :: String -> IO (Either Status Database)
+databaseOpen :: FilePath -> IO (Either Status Database)
 databaseOpen = database_open
 
 databaseVersion :: Database -> IO Int
