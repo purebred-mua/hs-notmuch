@@ -27,6 +27,8 @@ import Foreign
 import Foreign.C
 import qualified System.IO.Unsafe
 
+import qualified Data.ByteString as B
+
 import Notmuch.Talloc
 
 
@@ -236,14 +238,23 @@ message_get_date = flip withMessage {#call message_get_date #}
 
 -- returns EMPTY STRING on missing header,
 -- NOTHING on error (I know, confusing)
-message_get_header :: Message -> String -> IO (Maybe String)
+--
+-- possible optimisation: detachPtr the returned string and
+-- B.unsafePackCStringFinalizer to turn it into a ByteString
+-- with talloc_free finaliser.  This will be O(n) because
+-- must use strlen(3) to learn string length, and avoids
+-- malloc.  Measure carefully to see if this would be worth it,
+-- because it couples to both notmuch internals and unstable
+-- parts of bytestring API (Data.ByteString.Unsafe).
+--
+message_get_header :: Message -> B.ByteString -> IO (Maybe B.ByteString)
 message_get_header ptr s =
-  withCString s $ \s' ->
+  B.useAsCString s $ \s' ->
     withMessage ptr $ \ptr' -> do
       r <- {#call message_get_header #} ptr' s'
       if r == nullPtr
         then pure Nothing
-        else Just <$> peekCString r
+        else Just <$> B.packCString r
 
 message_get_tags :: Message -> IO [Tag]
 message_get_tags ptr = withMessage ptr $ \ptr' ->

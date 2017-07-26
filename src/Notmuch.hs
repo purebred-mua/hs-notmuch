@@ -73,6 +73,7 @@ module Notmuch
   , HasThread(..)
   ) where
 
+import qualified Data.ByteString as B
 import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 
@@ -152,12 +153,12 @@ messageId = message_get_message_id
 messageDate :: Message -> IO (UTCTime)
 messageDate = fmap (posixSecondsToUTCTime . realToFrac) . message_get_date
 
--- | Get the named header.  Empty string if header is
--- missing or 'Nothing' on error.
+-- | Get the named header as a UTF-8 encoded string.
+-- Empty string if header is missing or @Nothing@ on error.
 --
 -- /May open a file descriptor./
 --
-messageHeader :: String -> Message -> IO (Maybe String)
+messageHeader :: B.ByteString -> Message -> IO (Maybe B.ByteString)
 messageHeader = flip message_get_header
 
 messageFilename :: Message -> IO FilePath
