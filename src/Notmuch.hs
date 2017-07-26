@@ -70,6 +70,7 @@ module Notmuch
   , HasTags(..)
   , HasMessages(..)
   , HasThreads(..)
+  , HasThread(..)
   ) where
 
 import Data.Time (UTCTime)
