@@ -30,7 +30,7 @@ instance Show SearchTerm where
   show (Attachment s) = "attachment:" ++ s
   show (Tag s) = "tag:" ++ C.unpack s
   show (Id s) = "id:" ++ C.unpack s
-  show (Thread s) = "thread:" ++ s
+  show (Thread s) = "thread:" ++ C.unpack s
   show (Folder s) = "folder:" ++ s
   show (Path s) = "path:" ++ s
   show (Date t u) = "date:" ++ t ++ ".." ++ u

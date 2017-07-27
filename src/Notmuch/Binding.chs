@@ -37,7 +37,7 @@ import Notmuch.Talloc
 --
 type Tag = B.ByteString
 type MessageId = B.ByteString
-type ThreadId = String
+type ThreadId = B.ByteString
 
 --
 -- BINDING API
@@ -172,7 +172,7 @@ query_count_threads query =
 
 thread_get_thread_id :: Thread -> IO ThreadId
 thread_get_thread_id ptr =
-  withThread ptr ({#call thread_get_thread_id #} >=> peekCString)
+  withThread ptr ({#call thread_get_thread_id #} >=> B.packCString)
 
 -- notmuch_thread_get_total_messages
 -- notmuch_thread_get_toplevel_messages -> Messages
@@ -210,7 +210,7 @@ message_get_message_id ptr =
 
 message_get_thread_id :: Message -> IO ThreadId
 message_get_thread_id ptr =
-  withMessage ptr ({#call message_get_thread_id #} >=> peekCString)
+  withMessage ptr ({#call message_get_thread_id #} >=> B.packCString)
 
 message_get_replies :: Message -> IO [Message]
 message_get_replies ptr = withMessage ptr $ \ptr' ->
