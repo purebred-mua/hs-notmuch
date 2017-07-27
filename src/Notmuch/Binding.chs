@@ -35,7 +35,7 @@ import Notmuch.Talloc
 --
 -- Type synonyms
 --
-type Tag = String
+type Tag = B.ByteString
 type MessageId = B.ByteString
 type ThreadId = String
 
@@ -145,7 +145,7 @@ query_get_sort ptr = withQuery ptr $
 query_add_tag_exclude :: Query -> Tag -> IO ()
 query_add_tag_exclude ptr s =
   withQuery ptr $ \ptr' ->
-    withCString s $ \s' ->
+    B.useAsCString s $ \s' ->
       {#call query_add_tag_exclude #} ptr' s'
 
 query_search_threads :: Query -> IO [Thread]
@@ -369,13 +369,13 @@ ptrToList withFObj test get next f fObj = withFObj fObj ptrToList'
       (get ptr >>= f >>= \x -> next ptr >> pure x)
       (ptrToList' ptr)
 
-tagsToList :: Tags -> IO [String]
+tagsToList :: Tags -> IO [Tag]
 tagsToList = ptrToList
   withTags
   {#call tags_valid #}
   {#call tags_get #}
   {#call tags_move_to_next #}
-  peekCString
+  B.packCString
 
 threadsToList :: Threads -> IO [Thread]
 threadsToList = ptrToList

@@ -28,7 +28,7 @@ instance Show SearchTerm where
   show (To s) = "to:" ++ s
   show (Subject s) = "subject:" ++ s
   show (Attachment s) = "attachment:" ++ s
-  show (Tag s) = "tag:" ++ s
+  show (Tag s) = "tag:" ++ C.unpack s
   show (Id s) = "id:" ++ C.unpack s
   show (Thread s) = "thread:" ++ s
   show (Folder s) = "folder:" ++ s
