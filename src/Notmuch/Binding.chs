@@ -36,7 +36,7 @@ import Notmuch.Talloc
 -- Type synonyms
 --
 type Tag = String
-type MessageId = String
+type MessageId = B.ByteString
 type ThreadId = String
 
 --
@@ -96,7 +96,7 @@ database_find_message
   -> IO (Either Status (Maybe Message))
 database_find_message db s =
   withDatabase db $ \db' ->
-    withCString s $ \s' ->
+    B.useAsCString s $ \s' ->
       constructMaybe
         Message
         ({#call database_find_message #} db' s')
@@ -204,7 +204,7 @@ messages_collect_tags ptr = withMessages ptr $ \ptr' ->
     >>= newForeignPtr tags_destroy
     >>= tagsToList . Tags
 
-message_get_message_id :: Message -> IO B.ByteString
+message_get_message_id :: Message -> IO MessageId
 message_get_message_id ptr =
   withMessage ptr ({#call message_get_message_id #} >=> B.packCString)
 

@@ -1,5 +1,7 @@
 module Notmuch.Search where
 
+import qualified Data.ByteString.Char8 as C
+
 import Notmuch.Binding (Tag, MessageId, ThreadId)
 
 data SearchTerm
@@ -27,7 +29,7 @@ instance Show SearchTerm where
   show (Subject s) = "subject:" ++ s
   show (Attachment s) = "attachment:" ++ s
   show (Tag s) = "tag:" ++ s
-  show (Id s) = "id:" ++ s
+  show (Id s) = "id:" ++ C.unpack s
   show (Thread s) = "thread:" ++ s
   show (Folder s) = "folder:" ++ s
   show (Path s) = "path:" ++ s

@@ -53,6 +53,7 @@ module Notmuch
   , Database
   , databaseOpen
   , databaseVersion
+  , findMessage
 
   , Query
   , query
@@ -138,6 +139,9 @@ databaseOpen = database_open
 databaseVersion :: Database -> IO Int
 databaseVersion = database_get_version
 
+findMessage :: Database -> MessageId -> IO (Either Status (Maybe Message))
+findMessage = database_find_message
+
 query :: Database -> SearchTerm -> IO Query
 query db = query_create db . show
 
@@ -147,7 +151,7 @@ queryCountMessages = query_count_messages
 queryCountThreads :: Query -> IO Int
 queryCountThreads = query_count_threads
 
-messageId :: Message -> IO B.ByteString
+messageId :: Message -> IO MessageId
 messageId = message_get_message_id
 
 messageDate :: Message -> IO (UTCTime)
