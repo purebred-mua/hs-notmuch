@@ -71,7 +71,7 @@ database_open s = withCString s $ \s' ->
 
 -- notmuch_status_t notmuch_database_compact(path, backup_path, status_cb, closure)
 
-database_get_path :: Database -> IO String
+database_get_path :: Database -> IO FilePath
 database_get_path db =
   withDatabase db {#call database_get_path #} >>= peekCString
 
@@ -104,7 +104,7 @@ database_find_message db s =
 
 database_find_message_by_filename
   :: Database -- ^ Database
-  -> String   -- ^ Filename
+  -> FilePath   -- ^ Filename
   -> IO (Either Status (Maybe Message))
 database_find_message_by_filename db s =
   withDatabase db $ \db' ->
@@ -219,7 +219,7 @@ message_get_replies ptr = withMessage ptr $ \ptr' ->
     >>= newForeignPtr messages_destroy
     >>= messagesToList . Messages
 
-message_get_filename :: Message -> IO String
+message_get_filename :: Message -> IO FilePath
 message_get_filename ptr =
   withMessage ptr ({#call message_get_filename #} >=> peekCString)
 
