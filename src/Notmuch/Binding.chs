@@ -65,7 +65,7 @@ instance Show Status where
 --
 -- The database has no finaliser and will remain open even if GC'd.
 --
-database_open :: String -> IO (Either Status Database)
+database_open :: FilePath -> IO (Either Status Database)
 database_open s = withCString s $ \s' ->
   construct Database ({#call database_open #} s' 0) Nothing
 
