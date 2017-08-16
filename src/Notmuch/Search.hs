@@ -21,6 +21,7 @@ data SearchTerm
   | Or SearchTerm SearchTerm
   | Xor SearchTerm SearchTerm
   | Not SearchTerm
+  | Bare String
 
 instance Show SearchTerm where
   show (FreeForm s) = s -- TODO quote
@@ -39,3 +40,4 @@ instance Show SearchTerm where
   show (Or a b)   = "( " ++ show a ++  " or " ++ show b ++ " )"
   show (Xor a b)  = "( " ++ show a ++ " xor " ++ show b ++ " )"
   show (Not a)    = "( not " ++ show a ++ " )"
+  show (Bare s)   = s
