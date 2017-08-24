@@ -69,6 +69,15 @@ database_open :: FilePath -> IO (Either Status Database)
 database_open s = withCString s $ \s' ->
   construct Database ({#call database_open #} s' 0) Nothing
 
+-- | Close a Notmuch database
+--
+-- You don't want to do this if you still have references to
+-- objects derived from this database!
+--
+database_close :: Database -> IO Status
+database_close db =
+  toEnum . fromIntegral <$> withDatabase db {#call database_close #}
+
 -- notmuch_status_t notmuch_database_compact(path, backup_path, status_cb, closure)
 
 database_get_path :: Database -> IO FilePath
