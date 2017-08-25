@@ -16,11 +16,14 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Notmuch.Binding where
 
 import Control.Applicative ((<$>))
 import Control.Monad
+import Data.Proxy
 
 #include <notmuch.h>
 {#context prefix = "notmuch" #}
@@ -74,13 +77,29 @@ type RW = 'DatabaseModeReadWrite
 withDatabase :: Database a -> (Ptr DatabaseHandle -> IO b) -> IO b
 withDatabase (Database dbh) = withDatabaseHandle dbh
 
+fromEnum' :: (Enum a, Integral b) => a -> b
+fromEnum' = fromIntegral . fromEnum
+
+
+class Mode a where
+  getMode :: Proxy a -> DatabaseMode
+
+instance Mode 'DatabaseModeReadOnly where
+  getMode _ = DatabaseModeReadOnly
+
+instance Mode 'DatabaseModeReadWrite where
+  getMode _ = DatabaseModeReadWrite
+
 -- | Open a Notmuch database
 --
 -- The database has no finaliser and will remain open even if GC'd.
 --
-database_open :: FilePath -> IO (Either Status (Database 'DatabaseModeReadOnly))
+database_open :: forall a. Mode a => FilePath -> IO (Either Status (Database a))
 database_open s = withCString s $ \s' ->
-  construct (Database . DatabaseHandle) ({#call database_open #} s' 0) Nothing
+  construct
+    (Database . DatabaseHandle)
+    ({#call database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
+    Nothing  -- no destructor
 
 -- | Close a Notmuch database
 --

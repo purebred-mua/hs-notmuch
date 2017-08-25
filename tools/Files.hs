@@ -38,7 +38,7 @@ main = getArgs >>= \case
 
 go :: String -> String -> IO ()
 go dbDir searchTerm = do
-  databaseOpen dbDir
+  (databaseOpen dbDir :: IO (Either Status (Database RO)))
   >>= either
     (putStrLn . (("Error: " <>) . show))
     (flip query (Bare searchTerm)
