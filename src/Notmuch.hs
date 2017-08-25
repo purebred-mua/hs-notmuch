@@ -51,6 +51,8 @@ module Notmuch
   , ThreadId
 
   , Database
+  , RO
+  , RW
   , databaseOpen
   , databaseVersion
   , findMessage
@@ -92,7 +94,7 @@ import Notmuch.Search
 class HasTags a where
   tags :: a -> IO [Tag]
 
-instance HasTags Database where
+instance HasTags (Database a) where
   tags = database_get_all_tags
 
 instance HasTags Thread where
@@ -133,16 +135,16 @@ instance HasThread Message where
   threadId = message_get_thread_id
 
 
-databaseOpen :: FilePath -> IO (Either Status Database)
+databaseOpen :: FilePath -> IO (Either Status (Database RO))
 databaseOpen = database_open
 
-databaseVersion :: Database -> IO Int
+databaseVersion :: Database a -> IO Int
 databaseVersion = database_get_version
 
-findMessage :: Database -> MessageId -> IO (Either Status (Maybe Message))
+findMessage :: Database a -> MessageId -> IO (Either Status (Maybe Message))
 findMessage = database_find_message
 
-query :: Database -> SearchTerm -> IO Query
+query :: Database a -> SearchTerm -> IO Query
 query db = query_create db . show
 
 queryCountMessages :: Query -> IO Int

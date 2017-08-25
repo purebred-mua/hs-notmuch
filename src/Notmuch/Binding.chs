@@ -13,7 +13,9 @@
 -- You should have received a copy of the GNU General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE KindSignatures #-}
 
 module Notmuch.Binding where
 
@@ -47,7 +49,7 @@ type ThreadId = B.ByteString
 {#enum database_mode_t as DatabaseMode {underscoreToCase} #}
 {#enum sort_t as Sort {underscoreToCase} #}
 {#enum message_flag_t as MessageFlag {underscoreToCase} #}
-{#pointer *database_t as Database foreign newtype #}
+{#pointer *database_t as DatabaseHandle foreign newtype #}
 {#pointer *query_t as Query foreign newtype #}
 {#pointer *threads_t as Threads foreign newtype #}
 {#pointer *thread_t as Thread foreign newtype #}
@@ -61,30 +63,41 @@ instance Show Status where
   show a = System.IO.Unsafe.unsafePerformIO $
     {#call status_to_string #} (fromIntegral $ fromEnum a) >>= peekCString
 
+newtype Database (a :: DatabaseMode) = Database DatabaseHandle
+
+-- | Read-only database mode
+type RO = 'DatabaseModeReadOnly
+
+-- | Read-write database mode
+type RW = 'DatabaseModeReadWrite
+
+withDatabase :: Database a -> (Ptr DatabaseHandle -> IO b) -> IO b
+withDatabase (Database dbh) = withDatabaseHandle dbh
+
 -- | Open a Notmuch database
 --
 -- The database has no finaliser and will remain open even if GC'd.
 --
-database_open :: FilePath -> IO (Either Status Database)
+database_open :: FilePath -> IO (Either Status (Database 'DatabaseModeReadOnly))
 database_open s = withCString s $ \s' ->
-  construct Database ({#call database_open #} s' 0) Nothing
+  construct (Database . DatabaseHandle) ({#call database_open #} s' 0) Nothing
 
 -- | Close a Notmuch database
 --
 -- You don't want to do this if you still have references to
 -- objects derived from this database!
 --
-database_close :: Database -> IO Status
+database_close :: Database a -> IO Status
 database_close db =
   toEnum . fromIntegral <$> withDatabase db {#call database_close #}
 
 -- notmuch_status_t notmuch_database_compact(path, backup_path, status_cb, closure)
 
-database_get_path :: Database -> IO FilePath
+database_get_path :: Database a -> IO FilePath
 database_get_path db =
   withDatabase db {#call database_get_path #} >>= peekCString
 
-database_get_version :: Database -> IO Int
+database_get_version :: Database a -> IO Int
 database_get_version db =
   fromIntegral <$> withDatabase db {#call database_get_version #}
 
@@ -100,7 +113,7 @@ database_get_version db =
 -- notmuch_database_remove_message
 
 database_find_message
-  :: Database
+  :: Database a
   -> MessageId
   -> IO (Either Status (Maybe Message))
 database_find_message db s =
@@ -112,7 +125,7 @@ database_find_message db s =
         message_destroy
 
 database_find_message_by_filename
-  :: Database -- ^ Database
+  :: Database a -- ^ Database
   -> FilePath   -- ^ Filename
   -> IO (Either Status (Maybe Message))
 database_find_message_by_filename db s =
@@ -124,7 +137,7 @@ database_find_message_by_filename db s =
         message_destroy
 
 -- TODO: check for NULL, indicating error
-database_get_all_tags :: Database -> IO [Tag]
+database_get_all_tags :: Database a -> IO [Tag]
 database_get_all_tags ptr = withDatabase ptr $ \ptr' ->
   {#call database_get_all_tags #} ptr'
     >>= detachPtr
@@ -132,7 +145,7 @@ database_get_all_tags ptr = withDatabase ptr $ \ptr' ->
     >>= tagsToList . Tags
 
 -- TODO: check for NULL, indicating error
-query_create :: Database -> String -> IO Query
+query_create :: Database a -> String -> IO Query
 query_create db s = withCString s $ \s' ->
   withDatabase db $ \db' ->
     {#call notmuch_query_create #} db' s'
@@ -320,13 +333,13 @@ enumToCInt = fromIntegral . fromEnum
 -- | Receive an object into a pointer, handling nonzero status.
 --
 construct
-  :: (ForeignPtr p -> p)
+  :: (ForeignPtr p -> r)
   -- ^ Haskell data constructor
   -> (Ptr (Ptr p) -> IO CInt)
   -- ^ C double-pointer-style constructor
   -> Maybe (FinalizerPtr p)
   -- ^ Optional destructor
-  -> IO (Either Status p)
+  -> IO (Either Status r)
 construct dcon constructor destructor =
   let f = maybe newForeignPtr_ newForeignPtr destructor
   in alloca $ \ptr -> do
