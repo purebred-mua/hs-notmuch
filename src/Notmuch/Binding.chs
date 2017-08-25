@@ -64,7 +64,7 @@ type ThreadId = B.ByteString
 
 instance Show Status where
   show a = System.IO.Unsafe.unsafePerformIO $
-    {#call status_to_string #} (fromIntegral $ fromEnum a) >>= peekCString
+    {#call status_to_string #} (fromEnum' a) >>= peekCString
 
 newtype Database (a :: DatabaseMode) = Database DatabaseHandle
 
@@ -177,7 +177,7 @@ query_get_query_string ptr =
 
 query_set_sort :: Query -> Sort -> IO ()
 query_set_sort ptr x = withQuery ptr $ \ptr' ->
-  {#call query_set_sort #} ptr' (fromIntegral $ fromEnum x)
+  {#call query_set_sort #} ptr' (fromEnum' x)
 
 query_get_sort :: Query -> IO Sort
 query_get_sort ptr = withQuery ptr $
