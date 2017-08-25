@@ -74,6 +74,8 @@ module Notmuch
   , HasMessages(..)
   , HasThreads(..)
   , HasThread(..)
+
+  , Status(..)
   ) where
 
 import qualified Data.ByteString as B
