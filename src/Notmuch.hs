@@ -101,18 +101,18 @@ class HasTags a where
 instance HasTags (Database a) where
   tags = database_get_all_tags
 
-instance HasTags Thread where
+instance HasTags (Thread a) where
   tags = thread_get_tags
 
 instance HasTags Messages where
   tags = messages_collect_tags
 
-instance HasTags Message where
+instance HasTags (Message a) where
   tags = message_get_tags
 
 
 class HasMessages a where
-  messages :: a -> IO [Message]
+  messages :: a m -> IO [Message m]
 
 instance HasMessages Query where
   messages = query_search_messages
@@ -126,16 +126,16 @@ instance HasMessages Message where
 
 
 class HasThreads a where
-  threads :: a -> IO [Thread]
+  threads :: a m -> IO [Thread m]
 
 
 class HasThread a where
   threadId :: a -> IO ThreadId
 
-instance HasThread Thread where
+instance HasThread (Thread a) where
   threadId = thread_get_thread_id
 
-instance HasThread Message where
+instance HasThread (Message a) where
   threadId = message_get_thread_id
 
 
@@ -145,22 +145,22 @@ databaseOpen = database_open
 databaseVersion :: Database a -> IO Int
 databaseVersion = database_get_version
 
-findMessage :: Database a -> MessageId -> IO (Either Status (Maybe Message))
+findMessage :: Database a -> MessageId -> IO (Either Status (Maybe (Message a)))
 findMessage = database_find_message
 
-query :: Database a -> SearchTerm -> IO Query
+query :: Database a -> SearchTerm -> IO (Query a)
 query db = query_create db . show
 
-queryCountMessages :: Query -> IO Int
+queryCountMessages :: Query a -> IO Int
 queryCountMessages = query_count_messages
 
-queryCountThreads :: Query -> IO Int
+queryCountThreads :: Query a -> IO Int
 queryCountThreads = query_count_threads
 
-messageId :: Message -> IO MessageId
+messageId :: Message a -> IO MessageId
 messageId = message_get_message_id
 
-messageDate :: Message -> IO (UTCTime)
+messageDate :: Message a -> IO (UTCTime)
 messageDate = fmap (posixSecondsToUTCTime . realToFrac) . message_get_date
 
 -- | Get the named header as a UTF-8 encoded string.
@@ -168,8 +168,8 @@ messageDate = fmap (posixSecondsToUTCTime . realToFrac) . message_get_date
 --
 -- /May open a file descriptor./
 --
-messageHeader :: B.ByteString -> Message -> IO (Maybe B.ByteString)
+messageHeader :: B.ByteString -> Message a -> IO (Maybe B.ByteString)
 messageHeader = flip message_get_header
 
-messageFilename :: Message -> IO FilePath
+messageFilename :: Message a -> IO FilePath
 messageFilename = message_get_filename

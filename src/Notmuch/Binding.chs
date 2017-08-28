@@ -61,11 +61,11 @@ mkTag s
 {#enum sort_t as Sort {underscoreToCase} #}
 {#enum message_flag_t as MessageFlag {underscoreToCase} #}
 {#pointer *database_t as DatabaseHandle foreign newtype #}
-{#pointer *query_t as Query foreign newtype #}
+{#pointer *query_t as QueryHandle foreign newtype #}
 {#pointer *threads_t as Threads foreign newtype #}
-{#pointer *thread_t as Thread foreign newtype #}
+{#pointer *thread_t as ThreadHandle foreign newtype #}
 {#pointer *messages_t as Messages foreign newtype #}
-{#pointer *message_t as Message foreign newtype #}
+{#pointer *message_t as MessageHandle foreign newtype #}
 {#pointer *tags_t as Tags foreign newtype #}
 {#pointer *directory_t as Directory foreign newtype #}
 {#pointer *filenames_t as Filenames foreign newtype #}
@@ -74,16 +74,31 @@ instance Show Status where
   show a = System.IO.Unsafe.unsafePerformIO $
     {#call status_to_string #} (fromEnum' a) >>= peekCString
 
-newtype Database (a :: DatabaseMode) = Database DatabaseHandle
-
 -- | Read-only database mode
 type RO = 'DatabaseModeReadOnly
 
 -- | Read-write database mode
 type RW = 'DatabaseModeReadWrite
 
+newtype Database (a :: DatabaseMode) = Database DatabaseHandle
+
 withDatabase :: Database a -> (Ptr DatabaseHandle -> IO b) -> IO b
 withDatabase (Database dbh) = withDatabaseHandle dbh
+
+newtype Message (a :: DatabaseMode) = Message MessageHandle
+
+withMessage :: Message a -> (Ptr MessageHandle -> IO b) -> IO b
+withMessage (Message a) = withMessageHandle a
+
+newtype Thread (a :: DatabaseMode) = Thread ThreadHandle
+
+withThread :: Thread a -> (Ptr ThreadHandle -> IO b) -> IO b
+withThread (Thread a) = withThreadHandle a
+
+newtype Query (a :: DatabaseMode) = Query QueryHandle
+
+withQuery :: Query a -> (Ptr QueryHandle -> IO b) -> IO b
+withQuery (Query a) = withQueryHandle a
 
 fromEnum' :: (Enum a, Integral b) => a -> b
 fromEnum' = fromIntegral . fromEnum
@@ -155,24 +170,24 @@ database_get_version db =
 database_find_message
   :: Database a
   -> MessageId
-  -> IO (Either Status (Maybe Message))
+  -> IO (Either Status (Maybe (Message a)))
 database_find_message db s =
   withDatabase db $ \db' ->
     B.useAsCString s $ \s' ->
       constructMaybe
-        Message
+        (Message . MessageHandle)
         ({#call database_find_message #} db' s')
         message_destroy
 
 database_find_message_by_filename
   :: Database a -- ^ Database
   -> FilePath   -- ^ Filename
-  -> IO (Either Status (Maybe Message))
+  -> IO (Either Status (Maybe (Message a)))
 database_find_message_by_filename db s =
   withDatabase db $ \db' ->
     withCString s $ \s' ->
       constructMaybe
-        Message
+        (Message . MessageHandle)
         ({#call database_find_message_by_filename #} db' s')
         message_destroy
 
@@ -185,61 +200,61 @@ database_get_all_tags ptr = withDatabase ptr $ \ptr' ->
     >>= tagsToList . Tags
 
 -- TODO: check for NULL, indicating error
-query_create :: Database a -> String -> IO Query
+query_create :: Database a -> String -> IO (Query a)
 query_create db s = withCString s $ \s' ->
   withDatabase db $ \db' ->
     {#call notmuch_query_create #} db' s'
       >>= detachPtr
-      >>= fmap Query . newForeignPtr query_destroy
+      >>= fmap (Query . QueryHandle) . newForeignPtr query_destroy
 
-query_get_query_string :: Query -> IO String
+query_get_query_string :: Query a -> IO String
 query_get_query_string ptr =
   withQuery ptr ({#call query_get_query_string #} >=> peekCString)
 
-query_set_sort :: Query -> Sort -> IO ()
+query_set_sort :: Query a -> Sort -> IO ()
 query_set_sort ptr x = withQuery ptr $ \ptr' ->
   {#call query_set_sort #} ptr' (fromEnum' x)
 
-query_get_sort :: Query -> IO Sort
+query_get_sort :: Query a -> IO Sort
 query_get_sort ptr = withQuery ptr $
   fmap (toEnum . fromIntegral) . {#call query_get_sort #}
 
-query_add_tag_exclude :: Query -> Tag -> IO ()
+query_add_tag_exclude :: Query a -> Tag -> IO ()
 query_add_tag_exclude ptr (Tag s) =
   withQuery ptr $ \ptr' ->
     B.useAsCString s $ \s' ->
       {#call query_add_tag_exclude #} ptr' s'
 
-query_search_threads :: Query -> IO [Thread]
+query_search_threads :: Query a -> IO [Thread a]
 query_search_threads ptr = withQuery ptr $ \ptr' ->
   {#call query_search_threads #} ptr'
      >>= detachPtr
      >>= newForeignPtr threads_destroy
      >>= threadsToList . Threads
 
-query_search_messages :: Query -> IO [Message]
+query_search_messages :: Query a -> IO [Message a]
 query_search_messages ptr = withQuery ptr $ \ptr' ->
   {#call query_search_messages #} ptr'
     >>= detachPtr
     >>= newForeignPtr messages_destroy
     >>= messagesToList . Messages
 
-query_count_messages :: Query -> IO Int
+query_count_messages :: Query a -> IO Int
 query_count_messages query =
   fromIntegral <$> withQuery query {#call query_count_messages #}
 
-query_count_threads :: Query -> IO Int
+query_count_threads :: Query a -> IO Int
 query_count_threads query =
   fromIntegral <$> withQuery query {#call query_count_threads #}
 
-thread_get_thread_id :: Thread -> IO ThreadId
+thread_get_thread_id :: Thread a -> IO ThreadId
 thread_get_thread_id ptr =
   withThread ptr ({#call thread_get_thread_id #} >=> B.packCString)
 
 -- notmuch_thread_get_total_messages
 -- notmuch_thread_get_toplevel_messages -> Messages
 
-thread_get_messages :: Thread -> IO [Message]
+thread_get_messages :: Thread a -> IO [Message a]
 thread_get_messages ptr = withThread ptr $ \ptr' ->
   {#call thread_get_messages #} ptr'
     >>= detachPtr
@@ -252,7 +267,7 @@ thread_get_messages ptr = withThread ptr $ \ptr' ->
 -- notmuch_thread_get_oldest_date
 -- notmuch_thread_get_newest_date
 
-thread_get_tags :: Thread -> IO [Tag]
+thread_get_tags :: Thread a -> IO [Tag]
 thread_get_tags ptr = withThread ptr $ \ptr' ->
   {#call thread_get_tags #} ptr'
     >>= detachPtr
@@ -266,36 +281,36 @@ messages_collect_tags ptr = withMessages ptr $ \ptr' ->
     >>= newForeignPtr tags_destroy
     >>= tagsToList . Tags
 
-message_get_message_id :: Message -> IO MessageId
+message_get_message_id :: Message a -> IO MessageId
 message_get_message_id ptr =
   withMessage ptr ({#call message_get_message_id #} >=> B.packCString)
 
-message_get_thread_id :: Message -> IO ThreadId
+message_get_thread_id :: Message a -> IO ThreadId
 message_get_thread_id ptr =
   withMessage ptr ({#call message_get_thread_id #} >=> B.packCString)
 
-message_get_replies :: Message -> IO [Message]
+message_get_replies :: Message a -> IO [Message a]
 message_get_replies ptr = withMessage ptr $ \ptr' ->
   {#call message_get_replies #} ptr'
     >>= detachPtr
     >>= newForeignPtr messages_destroy
     >>= messagesToList . Messages
 
-message_get_filename :: Message -> IO FilePath
+message_get_filename :: Message a -> IO FilePath
 message_get_filename ptr =
   withMessage ptr ({#call message_get_filename #} >=> peekCString)
 
-message_get_flag :: Message -> MessageFlag -> IO Bool
+message_get_flag :: Message a -> MessageFlag -> IO Bool
 message_get_flag ptr flag = withMessage ptr $ \ptr' -> do
   result <- {#call message_get_flag #} ptr' (enumToCInt flag)
   return $ result /= 0
 
 -- DB NEEDS TO BE WRITABLE???
-message_set_flag :: Message -> MessageFlag -> Bool -> IO ()
+message_set_flag :: Message a -> MessageFlag -> Bool -> IO ()
 message_set_flag ptr flag v = withMessage ptr $ \ptr' ->
   {#call message_set_flag #} ptr' (enumToCInt flag) (enumToCInt v)
 
-message_get_date :: Message -> IO CLong
+message_get_date :: Message a -> IO CLong
 message_get_date = flip withMessage {#call message_get_date #}
 
 -- returns EMPTY STRING on missing header,
@@ -309,7 +324,7 @@ message_get_date = flip withMessage {#call message_get_date #}
 -- because it couples to both notmuch internals and unstable
 -- parts of bytestring API (Data.ByteString.Unsafe).
 --
-message_get_header :: Message -> B.ByteString -> IO (Maybe B.ByteString)
+message_get_header :: Message a -> B.ByteString -> IO (Maybe B.ByteString)
 message_get_header ptr s =
   B.useAsCString s $ \s' ->
     withMessage ptr $ \ptr' -> do
@@ -318,7 +333,7 @@ message_get_header ptr s =
         then pure Nothing
         else Just <$> B.packCString r
 
-message_get_tags :: Message -> IO [Tag]
+message_get_tags :: Message a -> IO [Tag]
 message_get_tags ptr = withMessage ptr $ \ptr' ->
   {#call message_get_tags #} ptr'
     >>= detachPtr
@@ -389,13 +404,13 @@ construct dcon constructor destructor =
 -- | Receive an object into a pointer, handling nonzero status and null.
 --
 constructMaybe
-  :: (ForeignPtr p -> p)
+  :: (ForeignPtr p -> r)
   -- ^ Haskell data constructor
   -> (Ptr (Ptr p) -> IO CInt)
   -- ^ C double-pointer-style constructor
   -> FinalizerPtr p
   -- ^ Destructor function pointer
-  -> IO (Either Status (Maybe p))
+  -> IO (Either Status (Maybe r))
 constructMaybe dcon constructor destructor =
   alloca $ \ptr ->
     toEnum . fromIntegral <$> constructor ptr
@@ -436,18 +451,18 @@ tagsToList = ptrToList
   {#call tags_move_to_next #}
   (fmap Tag . B.packCString)
 
-threadsToList :: Threads -> IO [Thread]
+threadsToList :: Threads -> IO [Thread a]
 threadsToList = ptrToList
   withThreads
   {#call threads_valid #}
   {#call threads_get #}
   {#call threads_move_to_next #}
-  (fmap Thread . newForeignPtr thread_destroy <=< detachPtr)
+  (fmap (Thread . ThreadHandle) . newForeignPtr thread_destroy <=< detachPtr)
 
-messagesToList :: Messages -> IO [Message]
+messagesToList :: Messages -> IO [Message a]
 messagesToList = ptrToList
   withMessages
   {#call messages_valid #}
   {#call messages_get #}
   {#call messages_move_to_next #}
-  (fmap Message . newForeignPtr message_destroy <=< detachPtr)
+  (fmap (Message . MessageHandle) . newForeignPtr message_destroy <=< detachPtr)
