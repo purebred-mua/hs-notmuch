@@ -89,23 +89,30 @@ status a e = Left e <$ a
 
 class Mode a where
   getMode :: Proxy a -> DatabaseMode
+  upgrade :: Database a -> IO (Either Status (Database a))
 
 instance Mode 'DatabaseModeReadOnly where
   getMode _ = DatabaseModeReadOnly
+  upgrade = pure . Right
 
 instance Mode 'DatabaseModeReadWrite where
   getMode _ = DatabaseModeReadWrite
+  upgrade db = do
+    toEnum . fromIntegral <$> withDatabase db (\dbPtr ->
+      {#call database_upgrade #} dbPtr nullFunPtr nullPtr)
+    >>= status (pure db)
 
 -- | Open a Notmuch database
 --
 -- The database has no finaliser and will remain open even if GC'd.
 --
 database_open :: forall a. Mode a => FilePath -> IO (Either Status (Database a))
-database_open s = withCString s $ \s' ->
+database_open s = withCString s (\s' ->
   construct
     (Database . DatabaseHandle)
     ({#call database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
     Nothing  -- no destructor
+  ) >>= either (pure . Left) upgrade
 
 -- | Close a Notmuch database
 --
