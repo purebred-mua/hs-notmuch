@@ -80,6 +80,12 @@ withDatabase (Database dbh) = withDatabaseHandle dbh
 fromEnum' :: (Enum a, Integral b) => a -> b
 fromEnum' = fromIntegral . fromEnum
 
+-- | If @StatusSuccess@ then @Right a@ else @Left status@.
+--
+status :: Functor f => f a -> Status -> f (Either Status a)
+status a StatusSuccess = Right <$> a
+status a e = Left e <$ a
+
 
 class Mode a where
   getMode :: Proxy a -> DatabaseMode
@@ -361,11 +367,9 @@ construct
   -> IO (Either Status r)
 construct dcon constructor destructor =
   let f = maybe newForeignPtr_ newForeignPtr destructor
-  in alloca $ \ptr -> do
-    status <- (toEnum . fromIntegral) <$> constructor ptr
-    if status == StatusSuccess
-      then fmap (Right . dcon) $ f =<< peek ptr
-      else return $ Left status
+  in alloca $ \ptr ->
+    (toEnum . fromIntegral) <$> constructor ptr
+      >>= status (fmap dcon $ f =<< peek ptr)
 
 -- | Receive an object into a pointer, handling nonzero status and null.
 --
@@ -378,13 +382,12 @@ constructMaybe
   -- ^ Destructor function pointer
   -> IO (Either Status (Maybe p))
 constructMaybe dcon constructor destructor =
-  alloca $ \ptr -> do
-    status <- constructor ptr
-    if status /= 0
-      then return $ Left $ toEnum $ fromIntegral status
-      else fmap Right $ peek ptr >>= \ptr' -> if ptr' /= nullPtr
+  alloca $ \ptr ->
+    toEnum . fromIntegral <$> constructor ptr
+    >>= status (peek ptr >>= \ptr' ->
+      if ptr' /= nullPtr
         then Just . dcon <$> newForeignPtr destructor ptr'
-        else return Nothing
+        else return Nothing)
 
 -- | Turn a C iterator into a list
 --
