@@ -47,6 +47,8 @@ The functions that may open file descriptors are:
 module Notmuch
   (
     Tag
+  , mkTag
+  , getTag
   , MessageId
   , ThreadId
 

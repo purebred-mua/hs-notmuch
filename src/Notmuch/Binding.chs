@@ -38,11 +38,19 @@ import Notmuch.Talloc
 
 
 --
--- Type synonyms
+-- Types and type synonyms
 --
-type Tag = B.ByteString
 type MessageId = B.ByteString
 type ThreadId = B.ByteString
+
+newtype Tag = Tag { getTag :: B.ByteString }
+
+-- | @Just@ a tag, or @Nothing@ if the string is too long
+
+mkTag :: B.ByteString -> Maybe Tag
+mkTag s
+  | B.length s > {#const NOTMUCH_TAG_MAX #} = Nothing
+  | otherwise = Just (Tag s)
 
 --
 -- BINDING API
@@ -197,7 +205,7 @@ query_get_sort ptr = withQuery ptr $
   fmap (toEnum . fromIntegral) . {#call query_get_sort #}
 
 query_add_tag_exclude :: Query -> Tag -> IO ()
-query_add_tag_exclude ptr s =
+query_add_tag_exclude ptr (Tag s) =
   withQuery ptr $ \ptr' ->
     B.useAsCString s $ \s' ->
       {#call query_add_tag_exclude #} ptr' s'
@@ -426,7 +434,7 @@ tagsToList = ptrToList
   {#call tags_valid #}
   {#call tags_get #}
   {#call tags_move_to_next #}
-  B.packCString
+  (fmap Tag . B.packCString)
 
 threadsToList :: Threads -> IO [Thread]
 threadsToList = ptrToList

@@ -30,7 +30,7 @@ library
     , time
 
   build-tools:
-    c2hs >= 0.15
+    c2hs >= 0.19.1
 
   extra-libraries:
     notmuch

@@ -2,7 +2,7 @@ module Notmuch.Search where
 
 import qualified Data.ByteString.Char8 as C
 
-import Notmuch.Binding (Tag, MessageId, ThreadId)
+import Notmuch.Binding (Tag, MessageId, ThreadId, getTag)
 
 data SearchTerm
   = FreeForm String
@@ -29,7 +29,7 @@ instance Show SearchTerm where
   show (To s) = "to:" ++ s
   show (Subject s) = "subject:" ++ s
   show (Attachment s) = "attachment:" ++ s
-  show (Tag s) = "tag:" ++ C.unpack s
+  show (Tag t) = "tag:" ++ C.unpack (getTag t)
   show (Id s) = "id:" ++ C.unpack s
   show (Thread s) = "thread:" ++ C.unpack s
   show (Folder s) = "folder:" ++ s
