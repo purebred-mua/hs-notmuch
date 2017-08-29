@@ -47,7 +47,6 @@ executable hs-notmuch-files
   main-is: Files.hs
   build-depends:
     base         >= 4.9
-    , semigroups >= 0.16
     , notmuch
 
 executable hs-notmuch-tag-message
