@@ -58,6 +58,7 @@ module Notmuch
   , RO
   , RW
   , databaseOpen
+  , databaseDestroy
   , databaseVersion
   , findMessage
 
@@ -84,6 +85,7 @@ module Notmuch
   ) where
 
 import Control.Exception (bracket)
+import Control.Monad (void)
 import Data.Foldable (traverse_)
 
 import qualified Data.ByteString as B
@@ -147,6 +149,14 @@ instance HasThread (Message n a) where
 
 databaseOpen :: Mode a => FilePath -> IO (Either Status (Database a))
 databaseOpen = database_open
+
+-- | Close the database and free associated resources
+--
+-- Don't use any resources derived from this database
+-- after using this function!
+--
+databaseDestroy :: Database a -> IO ()
+databaseDestroy = void . database_destroy
 
 databaseVersion :: Database a -> IO Int
 databaseVersion = database_get_version

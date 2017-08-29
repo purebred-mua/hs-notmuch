@@ -145,14 +145,9 @@ database_open s = withCString s (\s' ->
     Nothing  -- no destructor
   ) >>= either (pure . Left) upgrade
 
--- | Close a Notmuch database
---
--- You don't want to do this if you still have references to
--- objects derived from this database!
---
-database_close :: Database a -> IO Status
-database_close db =
-  toEnum . fromIntegral <$> withDatabase db {#call database_close #}
+database_destroy :: Database a -> IO Status
+database_destroy db =
+  toEnum . fromIntegral <$> withDatabase db {#call database_destroy #}
 
 -- notmuch_status_t notmuch_database_compact(path, backup_path, status_cb, closure)
 
@@ -405,9 +400,6 @@ message_thaw msg = withMessage msg $ \ptr ->
 --
 -- Destructors
 --
-
-foreign import ccall "&notmuch_database_destroy"
-  database_destroy :: FinalizerPtr a
 
 foreign import ccall "&notmuch_query_destroy"
   query_destroy :: FinalizerPtr a
