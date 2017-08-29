@@ -14,6 +14,8 @@
 -- You should have received a copy of the GNU General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+{-# LANGUAGE DataKinds #-}
+
 {-|
 
 High-level interface to the /notmuch/ mail indexer.
@@ -107,12 +109,12 @@ instance HasTags (Thread a) where
 instance HasTags Messages where
   tags = messages_collect_tags
 
-instance HasTags (Message a) where
+instance HasTags (Message n a) where
   tags = message_get_tags
 
 
 class HasMessages a where
-  messages :: a m -> IO [Message m]
+  messages :: a m -> IO [Message 0 m]
 
 instance HasMessages Query where
   messages = query_search_messages
@@ -120,7 +122,7 @@ instance HasMessages Query where
 instance HasMessages Thread where
   messages = thread_get_messages
 
-instance HasMessages Message where
+instance HasMessages (Message n) where
   messages = message_get_replies
   -- replies!
 
@@ -135,7 +137,7 @@ class HasThread a where
 instance HasThread (Thread a) where
   threadId = thread_get_thread_id
 
-instance HasThread (Message a) where
+instance HasThread (Message n a) where
   threadId = message_get_thread_id
 
 
@@ -145,7 +147,7 @@ databaseOpen = database_open
 databaseVersion :: Database a -> IO Int
 databaseVersion = database_get_version
 
-findMessage :: Database a -> MessageId -> IO (Either Status (Maybe (Message a)))
+findMessage :: Database a -> MessageId -> IO (Either Status (Maybe (Message 0 a)))
 findMessage = database_find_message
 
 query :: Database a -> SearchTerm -> IO (Query a)
@@ -157,10 +159,10 @@ queryCountMessages = query_count_messages
 queryCountThreads :: Query a -> IO Int
 queryCountThreads = query_count_threads
 
-messageId :: Message a -> IO MessageId
+messageId :: Message n a -> IO MessageId
 messageId = message_get_message_id
 
-messageDate :: Message a -> IO (UTCTime)
+messageDate :: Message n a -> IO (UTCTime)
 messageDate = fmap (posixSecondsToUTCTime . realToFrac) . message_get_date
 
 -- | Get the named header as a UTF-8 encoded string.
@@ -168,8 +170,8 @@ messageDate = fmap (posixSecondsToUTCTime . realToFrac) . message_get_date
 --
 -- /May open a file descriptor./
 --
-messageHeader :: B.ByteString -> Message a -> IO (Maybe B.ByteString)
+messageHeader :: B.ByteString -> Message n a -> IO (Maybe B.ByteString)
 messageHeader = flip message_get_header
 
-messageFilename :: Message a -> IO FilePath
+messageFilename :: Message n a -> IO FilePath
 messageFilename = message_get_filename

@@ -24,6 +24,7 @@ module Notmuch.Binding where
 import Control.Applicative (liftA2)
 import Control.Monad ((>=>), (<=<), void)
 import Data.Proxy
+import GHC.TypeLits
 
 #include <notmuch.h>
 {#context prefix = "notmuch" #}
@@ -88,9 +89,9 @@ newtype Database (a :: DatabaseMode) = Database DatabaseHandle
 withDatabase :: Database a -> (Ptr DatabaseHandle -> IO b) -> IO b
 withDatabase (Database dbh) = withDatabaseHandle dbh
 
-newtype Message (a :: DatabaseMode) = Message MessageHandle
+newtype Message (n :: Nat) (a :: DatabaseMode) = Message MessageHandle
 
-withMessage :: Message a -> (Ptr MessageHandle -> IO b) -> IO b
+withMessage :: Message n a -> (Ptr MessageHandle -> IO b) -> IO b
 withMessage (Message a) = withMessageHandle a
 
 newtype Thread (a :: DatabaseMode) = Thread ThreadHandle
@@ -173,7 +174,7 @@ database_get_version db =
 database_find_message
   :: Database a
   -> MessageId
-  -> IO (Either Status (Maybe (Message a)))
+  -> IO (Either Status (Maybe (Message 0 a)))
 database_find_message db s =
   withDatabase db $ \db' ->
     B.useAsCString s $ \s' ->
@@ -185,7 +186,7 @@ database_find_message db s =
 database_find_message_by_filename
   :: Database a -- ^ Database
   -> FilePath   -- ^ Filename
-  -> IO (Either Status (Maybe (Message a)))
+  -> IO (Either Status (Maybe (Message 0 a)))
 database_find_message_by_filename db s =
   withDatabase db $ \db' ->
     withCString s $ \s' ->
@@ -235,7 +236,7 @@ query_search_threads ptr = withQuery ptr $ \ptr' ->
      >>= newForeignPtr threads_destroy
      >>= threadsToList . Threads
 
-query_search_messages :: Query a -> IO [Message a]
+query_search_messages :: Query a -> IO [Message 0 a]
 query_search_messages ptr = withQuery ptr $ \ptr' ->
   {#call query_search_messages #} ptr'
     >>= detachPtr
@@ -257,7 +258,7 @@ thread_get_thread_id ptr =
 -- notmuch_thread_get_total_messages
 -- notmuch_thread_get_toplevel_messages -> Messages
 
-thread_get_messages :: Thread a -> IO [Message a]
+thread_get_messages :: Thread a -> IO [Message 0 a]
 thread_get_messages ptr = withThread ptr $ \ptr' ->
   {#call thread_get_messages #} ptr'
     >>= detachPtr
@@ -284,35 +285,35 @@ messages_collect_tags ptr = withMessages ptr $ \ptr' ->
     >>= newForeignPtr tags_destroy
     >>= tagsToList . Tags
 
-message_get_message_id :: Message a -> IO MessageId
+message_get_message_id :: Message n a -> IO MessageId
 message_get_message_id ptr =
   withMessage ptr ({#call message_get_message_id #} >=> B.packCString)
 
-message_get_thread_id :: Message a -> IO ThreadId
+message_get_thread_id :: Message n a -> IO ThreadId
 message_get_thread_id ptr =
   withMessage ptr ({#call message_get_thread_id #} >=> B.packCString)
 
-message_get_replies :: Message a -> IO [Message a]
+message_get_replies :: Message n a -> IO [Message 0 a]
 message_get_replies ptr = withMessage ptr $ \ptr' ->
   {#call message_get_replies #} ptr'
     >>= detachPtr
     >>= newForeignPtr messages_destroy
     >>= messagesToList . Messages
 
-message_get_filename :: Message a -> IO FilePath
+message_get_filename :: Message n a -> IO FilePath
 message_get_filename ptr =
   withMessage ptr ({#call message_get_filename #} >=> peekCString)
 
-message_get_flag :: Message a -> MessageFlag -> IO Bool
+message_get_flag :: Message n a -> MessageFlag -> IO Bool
 message_get_flag ptr flag = withMessage ptr $ \ptr' -> do
   (/= 0) <$> {#call message_get_flag #} ptr' (enumToCInt flag)
 
 -- DB NEEDS TO BE WRITABLE???
-message_set_flag :: Message a -> MessageFlag -> Bool -> IO ()
+message_set_flag :: Message n a -> MessageFlag -> Bool -> IO ()
 message_set_flag ptr flag v = withMessage ptr $ \ptr' ->
   {#call message_set_flag #} ptr' (enumToCInt flag) (enumToCInt v)
 
-message_get_date :: Message a -> IO CLong
+message_get_date :: Message n a -> IO CLong
 message_get_date = flip withMessage {#call message_get_date #}
 
 -- returns EMPTY STRING on missing header,
@@ -326,7 +327,7 @@ message_get_date = flip withMessage {#call message_get_date #}
 -- because it couples to both notmuch internals and unstable
 -- parts of bytestring API (Data.ByteString.Unsafe).
 --
-message_get_header :: Message a -> B.ByteString -> IO (Maybe B.ByteString)
+message_get_header :: Message n a -> B.ByteString -> IO (Maybe B.ByteString)
 message_get_header ptr s =
   B.useAsCString s $ \s' ->
     withMessage ptr $ \ptr' -> do
@@ -335,7 +336,7 @@ message_get_header ptr s =
         then pure Nothing
         else Just <$> B.packCString r
 
-message_get_tags :: Message a -> IO [Tag]
+message_get_tags :: Message n a -> IO [Tag]
 message_get_tags ptr = withMessage ptr $ \ptr' ->
   {#call message_get_tags #} ptr'
     >>= detachPtr
@@ -344,11 +345,11 @@ message_get_tags ptr = withMessage ptr $ \ptr' ->
 
 -- According to the header file, possible errors are:
 --
--- * NOTMUCH_STATUS_READ_ONLY_DATABASE (excluded by @Message RW@)
+-- * NOTMUCH_STATUS_READ_ONLY_DATABASE (excluded by @Message n RW@)
 --
 -- Therefore assume everything worked!
 --
-message_remove_all_tags :: Message RW -> IO ()
+message_remove_all_tags :: Message n RW -> IO ()
 message_remove_all_tags msg = withMessage msg $ \ptr ->
   void $ {#call message_remove_all_tags #} ptr
 
@@ -360,7 +361,7 @@ message_remove_all_tags msg = withMessage msg $ \ptr ->
 --
 -- Therefore assume everything worked!
 --
-message_add_tag :: Message RW -> Tag -> IO ()
+message_add_tag :: Message n RW -> Tag -> IO ()
 message_add_tag msg (Tag s) = withMessage msg $ \ptr ->
   B.useAsCString s $ \s' ->
     void $ {#call message_add_tag #} ptr s'
@@ -483,7 +484,7 @@ threadsToList = ptrToList
   {#call threads_move_to_next #}
   (fmap (Thread . ThreadHandle) . newForeignPtr thread_destroy <=< detachPtr)
 
-messagesToList :: Messages -> IO [Message a]
+messagesToList :: Messages -> IO [Message 0 a]
 messagesToList = ptrToList
   withMessages
   {#call messages_valid #}
