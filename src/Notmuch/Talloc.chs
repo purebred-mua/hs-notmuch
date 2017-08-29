@@ -17,13 +17,9 @@
 
 module Notmuch.Talloc where
 
-import Control.Applicative ((<$>))
-
 #include <talloc.h>
 
-import Foreign
-import Foreign.C
-
+import Foreign (Ptr, castPtr, nullPtr)
 
 detachPtr :: Ptr a -> IO (Ptr a)
 detachPtr ptr =
