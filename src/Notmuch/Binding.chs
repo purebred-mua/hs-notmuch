@@ -138,8 +138,9 @@ instance Mode 'DatabaseModeReadWrite where
 -- The database has no finaliser and will remain open even if GC'd.
 --
 database_open :: forall a. Mode a => FilePath -> IO (Either Status (Database a))
-database_open s = withCString s (\s' ->
-  construct
+database_open s = withCString s (\s' -> (fmap . fmap) runIdentity $
+  constructF
+    (pure . Identity)
     (Database . DatabaseHandle)
     ({#call database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
     Nothing  -- no destructor
@@ -426,19 +427,6 @@ foreign import ccall "&notmuch_tags_destroy"
 
 enumToCInt :: Enum a => a -> CInt
 enumToCInt = fromIntegral . fromEnum
-
--- | Receive an object into a pointer, handling nonzero status.
---
-construct
-  :: (ForeignPtr p -> r)
-  -- ^ Haskell data constructor
-  -> (Ptr (Ptr p) -> IO CInt)
-  -- ^ C double-pointer-style constructor
-  -> Maybe (FinalizerPtr p)
-  -- ^ Optional destructor
-  -> IO (Either Status r)
-construct hcon con =
-  (fmap . fmap) runIdentity . (constructF (pure . Identity) hcon con)
 
 constructF
   :: Traversable t
