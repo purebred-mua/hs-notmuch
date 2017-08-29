@@ -18,11 +18,14 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Notmuch.Binding where
 
 import Control.Applicative (liftA2)
 import Control.Monad ((>=>), (<=<), void)
+import Data.Coerce (coerce)
 import Data.Proxy
 import GHC.TypeLits
 
@@ -366,12 +369,31 @@ message_add_tag msg (Tag s) = withMessage msg $ \ptr ->
   B.useAsCString s $ \s' ->
     void $ {#call message_add_tag #} ptr s'
 
+-- According to the header file, possible errors are:
+--
+-- * NOTMUCH_STATUS_READ_ONLY_DATABASE (excluded by @Message n RW@)
+--
+-- Therefore assume everything worked!
+--
+message_freeze :: Message n RW -> IO (Message (n + 1) RW)
+message_freeze msg = withMessage msg $ \ptr ->
+  coerce msg <$ {#call message_freeze #} ptr
+
+-- According to the header file, possible errors are:
+--
+-- * NOTMUCH_STATUS_READ_ONLY_DATABASE (excluded by @Message n RW@)
+-- * NOTMUCH_STATUS_UNBALANCED_FREEZE_THAW
+--     (excluded by @(CmpNat n 0 ~ 'GT) => Message n RW@)
+--
+-- Therefore assume everything worked!
+--
+message_thaw :: (CmpNat n 0 ~ 'GT) => Message n RW -> IO (Message (n - 1) RW)
+message_thaw msg = withMessage msg $ \ptr ->
+  coerce msg <$ {#call message_thaw #} ptr
+
 -- message_remove_tag
--- message_remove_all_tags
 -- message_maildir_flags_to_tags
 -- message_tags_to_maildir_flags
--- message_freeze
--- message_thaw
 
 -- directory functions
 
