@@ -73,6 +73,7 @@ module Notmuch
   , messageDate
   , messageHeader
   , messageFilename
+  , messageSetTags
 
   , HasTags(..)
   , HasMessages(..)
@@ -81,6 +82,9 @@ module Notmuch
 
   , Status(..)
   ) where
+
+import Control.Exception (bracket)
+import Data.Foldable (traverse_)
 
 import qualified Data.ByteString as B
 import Data.Time (UTCTime)
@@ -175,3 +179,19 @@ messageHeader = flip message_get_header
 
 messageFilename :: Message n a -> IO FilePath
 messageFilename = message_get_filename
+
+-- | Freeze the message, run the given computation
+-- and return the result.  The message is always thawed at the end.
+-- (Don't thaw the message as part of the computation!)
+--
+-- Have to start with @Message 0 RW@ due to GHC type system limitation
+-- (type-level Nat is not inductive).
+--
+withFrozenMessage :: (Message 1 RW -> IO a) -> Message 0 RW -> IO a
+withFrozenMessage k msg = bracket (message_freeze msg) message_thaw k
+
+-- | Set tags for the message.  Atomic.
+--
+messageSetTags :: Foldable t => t Tag -> Message 0 RW -> IO ()
+messageSetTags l = withFrozenMessage $ \msg ->
+  message_remove_all_tags msg *> traverse_ (message_add_tag msg) l
