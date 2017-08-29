@@ -1,5 +1,7 @@
 module Notmuch.Search where
 
+import Data.Semigroup ((<>))
+
 import qualified Data.ByteString.Char8 as C
 
 import Notmuch.Binding (Tag, MessageId, ThreadId, getTag)
@@ -25,19 +27,19 @@ data SearchTerm
 
 instance Show SearchTerm where
   show (FreeForm s) = s -- TODO quote
-  show (From s) = "from:" ++ s
-  show (To s) = "to:" ++ s
-  show (Subject s) = "subject:" ++ s
-  show (Attachment s) = "attachment:" ++ s
-  show (Tag t) = "tag:" ++ C.unpack (getTag t)
-  show (Id s) = "id:" ++ C.unpack s
-  show (Thread s) = "thread:" ++ C.unpack s
-  show (Folder s) = "folder:" ++ s
-  show (Path s) = "path:" ++ s
-  show (Date t u) = "date:" ++ t ++ ".." ++ u
+  show (From s) = "from:" <> s
+  show (To s) = "to:" <> s
+  show (Subject s) = "subject:" <> s
+  show (Attachment s) = "attachment:" <> s
+  show (Tag t) = "tag:" <> C.unpack (getTag t)
+  show (Id s) = "id:" <> C.unpack s
+  show (Thread s) = "thread:" <> C.unpack s
+  show (Folder s) = "folder:" <> s
+  show (Path s) = "path:" <> s
+  show (Date t u) = "date:" <> t <> ".." <> u
   show Asterisk = "*"
-  show (And a b)  = "( " ++ show a ++ " and " ++ show b ++ " )"
-  show (Or a b)   = "( " ++ show a ++  " or " ++ show b ++ " )"
-  show (Xor a b)  = "( " ++ show a ++ " xor " ++ show b ++ " )"
-  show (Not a)    = "( not " ++ show a ++ " )"
+  show (And a b)  = "( " <> show a <> " and " <> show b <> " )"
+  show (Or a b)   = "( " <> show a <>  " or " <> show b <> " )"
+  show (Xor a b)  = "( " <> show a <> " xor " <> show b <> " )"
+  show (Not a)    = "( not " <> show a <> " )"
   show (Bare s)   = s
