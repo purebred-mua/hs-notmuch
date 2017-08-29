@@ -182,7 +182,8 @@ database_find_message
 database_find_message db s =
   withDatabase db $ \db' ->
     B.useAsCString s $ \s' ->
-      constructMaybe
+      constructF
+        (\ptr -> if ptr /= nullPtr then Just <$> detachPtr ptr else pure Nothing)
         (Message . MessageHandle)
         ({#call database_find_message #} db' s')
         (Just message_destroy)
@@ -194,7 +195,8 @@ database_find_message_by_filename
 database_find_message_by_filename db s =
   withDatabase db $ \db' ->
     withCString s $ \s' ->
-      constructMaybe
+      constructF
+        (\ptr -> if ptr /= nullPtr then Just <$> detachPtr ptr else pure Nothing)
         (Message . MessageHandle)
         ({#call database_find_message_by_filename #} db' s')
         (Just message_destroy)
@@ -444,24 +446,11 @@ construct
   -- ^ Optional destructor
   -> IO (Either Status r)
 construct hcon con =
-  (fmap . fmap) runIdentity . (constructF Identity hcon con)
-
--- | Receive an object into a pointer, handling nonzero status and null.
---
-constructMaybe
-  :: (ForeignPtr p -> r)
-  -- ^ Haskell data constructor
-  -> (Ptr (Ptr p) -> IO CInt)
-  -- ^ C double-pointer-style constructor
-  -> Maybe (FinalizerPtr p)
-  -- ^ Destructor function pointer
-  -> IO (Either Status (Maybe r))
-constructMaybe =
-  constructF (\ptr -> if ptr /= nullPtr then Just ptr else Nothing)
+  (fmap . fmap) runIdentity . (constructF (pure . Identity) hcon con)
 
 constructF
   :: Traversable t
-  => (Ptr p -> t (Ptr p))
+  => (Ptr p -> IO (t (Ptr p)))
   -- ^ Inspect received pointer and lift it into a Traversable
   -> (ForeignPtr p -> r)
   -- ^ Haskell data constructor
@@ -474,7 +463,7 @@ constructF mkF dcon constructor destructor =
   let mkForeignPtr = maybe newForeignPtr_ newForeignPtr destructor
   in alloca $ \ptr ->
     toEnum . fromIntegral <$> constructor ptr
-    >>= status (mkF <$> peek ptr >>= traverse (fmap dcon . mkForeignPtr))
+    >>= status (peek ptr >>= mkF >>= traverse (fmap dcon . mkForeignPtr))
 
 -- | Turn a C iterator into a list
 --
