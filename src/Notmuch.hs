@@ -58,6 +58,7 @@ module Notmuch
   , RO
   , RW
   , databaseOpen
+  , databaseOpenReadOnly
   , databaseDestroy
   , databaseVersion
   , findMessage
@@ -149,6 +150,10 @@ instance HasThread (Message n a) where
 
 databaseOpen :: Mode a => FilePath -> IO (Either Status (Database a))
 databaseOpen = database_open
+
+-- | Convenience function for opening a database read-only
+databaseOpenReadOnly :: FilePath -> IO (Either Status (Database RO))
+databaseOpenReadOnly = database_open
 
 -- | Close the database and free associated resources
 --
