@@ -21,14 +21,17 @@
 
 module Notmuch.Binding where
 
-import Control.Applicative ((<$>))
-import Control.Monad
+import Control.Applicative (liftA2)
+import Control.Monad ((>=>), (<=<))
 import Data.Proxy
 
 #include <notmuch.h>
 {#context prefix = "notmuch" #}
 
 import Foreign
+  ( FinalizerPtr, ForeignPtr, Ptr
+  , alloca, newForeignPtr, newForeignPtr_, nullFunPtr, nullPtr, peek
+  )
 import Foreign.C
 import qualified System.IO.Unsafe
 
@@ -302,8 +305,7 @@ message_get_filename ptr =
 
 message_get_flag :: Message a -> MessageFlag -> IO Bool
 message_get_flag ptr flag = withMessage ptr $ \ptr' -> do
-  result <- {#call message_get_flag #} ptr' (enumToCInt flag)
-  return $ result /= 0
+  (/= 0) <$> {#call message_get_flag #} ptr' (enumToCInt flag)
 
 -- DB NEEDS TO BE WRITABLE???
 message_set_flag :: Message a -> MessageFlag -> Bool -> IO ()
@@ -417,7 +419,7 @@ constructMaybe dcon constructor destructor =
     >>= status (peek ptr >>= \ptr' ->
       if ptr' /= nullPtr
         then Just . dcon <$> newForeignPtr destructor ptr'
-        else return Nothing)
+        else pure Nothing)
 
 -- | Turn a C iterator into a list
 --
@@ -438,8 +440,8 @@ ptrToList
 ptrToList withFObj test get next f fObj = withFObj fObj ptrToList'
   where
   ptrToList' ptr = test ptr >>= \valid -> if valid == 0
-    then return []
-    else liftM2 (:)
+    then pure []
+    else liftA2 (:)
       (get ptr >>= f >>= \x -> next ptr >> pure x)
       (ptrToList' ptr)
 
