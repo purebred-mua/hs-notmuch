@@ -49,3 +49,13 @@ executable hs-notmuch-files
     base         >= 4.8
     , semigroups >= 0.16
     , notmuch
+
+executable hs-notmuch-tag-message
+  default-language:    Haskell2010
+  hs-source-dirs: tools
+  ghc-options: -Wall
+  main-is: TagMessage.hs
+  build-depends:
+    base         >= 4.9
+    , bytestring
+    , notmuch
