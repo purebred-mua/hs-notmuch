@@ -26,6 +26,7 @@ module Notmuch.Binding where
 import Control.Applicative (liftA2)
 import Control.Monad ((>=>), (<=<), void)
 import Data.Coerce (coerce)
+import Data.Functor.Identity (Identity(..))
 import Data.Proxy
 import GHC.TypeLits
 
@@ -184,7 +185,7 @@ database_find_message db s =
       constructMaybe
         (Message . MessageHandle)
         ({#call database_find_message #} db' s')
-        message_destroy
+        (Just message_destroy)
 
 database_find_message_by_filename
   :: Database a -- ^ Database
@@ -196,7 +197,7 @@ database_find_message_by_filename db s =
       constructMaybe
         (Message . MessageHandle)
         ({#call database_find_message_by_filename #} db' s')
-        message_destroy
+        (Just message_destroy)
 
 -- TODO: check for NULL, indicating error
 database_get_all_tags :: Database a -> IO [Tag]
@@ -442,11 +443,8 @@ construct
   -> Maybe (FinalizerPtr p)
   -- ^ Optional destructor
   -> IO (Either Status r)
-construct dcon constructor destructor =
-  let f = maybe newForeignPtr_ newForeignPtr destructor
-  in alloca $ \ptr ->
-    (toEnum . fromIntegral) <$> constructor ptr
-      >>= status (fmap dcon $ f =<< peek ptr)
+construct hcon con =
+  (fmap . fmap) runIdentity . (constructF Identity hcon con)
 
 -- | Receive an object into a pointer, handling nonzero status and null.
 --
@@ -455,16 +453,28 @@ constructMaybe
   -- ^ Haskell data constructor
   -> (Ptr (Ptr p) -> IO CInt)
   -- ^ C double-pointer-style constructor
-  -> FinalizerPtr p
+  -> Maybe (FinalizerPtr p)
   -- ^ Destructor function pointer
   -> IO (Either Status (Maybe r))
-constructMaybe dcon constructor destructor =
-  alloca $ \ptr ->
+constructMaybe =
+  constructF (\ptr -> if ptr /= nullPtr then Just ptr else Nothing)
+
+constructF
+  :: Traversable t
+  => (Ptr p -> t (Ptr p))
+  -- ^ Inspect received pointer and lift it into a Traversable
+  -> (ForeignPtr p -> r)
+  -- ^ Haskell data constructor
+  -> (Ptr (Ptr p) -> IO CInt)
+  -- ^ C double-pointer-style constructor
+  -> Maybe (FinalizerPtr p)
+  -- ^ Optional destructor
+  -> IO (Either Status (t r))
+constructF mkF dcon constructor destructor =
+  let mkForeignPtr = maybe newForeignPtr_ newForeignPtr destructor
+  in alloca $ \ptr ->
     toEnum . fromIntegral <$> constructor ptr
-    >>= status (peek ptr >>= \ptr' ->
-      if ptr' /= nullPtr
-        then Just . dcon <$> newForeignPtr destructor ptr'
-        else pure Nothing)
+    >>= status (mkF <$> peek ptr >>= traverse (fmap dcon . mkForeignPtr))
 
 -- | Turn a C iterator into a list
 --
