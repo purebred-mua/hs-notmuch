@@ -22,7 +22,7 @@
 module Notmuch.Binding where
 
 import Control.Applicative (liftA2)
-import Control.Monad ((>=>), (<=<))
+import Control.Monad ((>=>), (<=<), void)
 import Data.Proxy
 
 #include <notmuch.h>
@@ -342,7 +342,29 @@ message_get_tags ptr = withMessage ptr $ \ptr' ->
     >>= newForeignPtr tags_destroy
     >>= tagsToList . Tags
 
--- message_add_tag
+-- According to the header file, possible errors are:
+--
+-- * NOTMUCH_STATUS_READ_ONLY_DATABASE (excluded by @Message RW@)
+--
+-- Therefore assume everything worked!
+--
+message_remove_all_tags :: Message RW -> IO ()
+message_remove_all_tags msg = withMessage msg $ \ptr ->
+  void $ {#call message_remove_all_tags #} ptr
+
+-- According to the header file, possible errors are:
+--
+-- * NOTMUCH_STATUS_NULL_POINTER (excluded by @B.useAsCString@)
+-- * NOTMUCH_STATUS_TAG_TOO_LONG (excluded by @Tag@ smart constructor)
+-- * NOTMUCH_STATUS_READ_ONLY_DATABASE (excluded by @Message RW@)
+--
+-- Therefore assume everything worked!
+--
+message_add_tag :: Message RW -> Tag -> IO ()
+message_add_tag msg (Tag s) = withMessage msg $ \ptr ->
+  B.useAsCString s $ \s' ->
+    void $ {#call message_add_tag #} ptr s'
+
 -- message_remove_tag
 -- message_remove_all_tags
 -- message_maildir_flags_to_tags
