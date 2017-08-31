@@ -23,7 +23,6 @@
 
 module Notmuch.Binding where
 
-import Control.Applicative (liftA2)
 import Control.Monad ((>=>), (<=<), void)
 import Data.Coerce (coerce)
 import Data.Functor.Identity (Identity(..))
@@ -463,11 +462,9 @@ ptrToList
   -> IO [b]
 ptrToList withFObj test get next f fObj = withFObj fObj ptrToList'
   where
-  ptrToList' ptr = test ptr >>= \valid -> if valid == 0
-    then pure []
-    else liftA2 (:)
-      (get ptr >>= f >>= \x -> next ptr >> pure x)
-      (ptrToList' ptr)
+  ptrToList' ptr = test ptr >>= \valid -> case valid of
+    0 -> pure []
+    _ -> (:) <$> (get ptr >>= f >>= \x -> next ptr >> pure x) <*> ptrToList' ptr
 
 tagsToList :: Tags -> IO [Tag]
 tagsToList = ptrToList
