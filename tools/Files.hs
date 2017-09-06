@@ -23,9 +23,11 @@ Search a notmuch database and print the filenames of each email found.
 {-# LANGUAGE LambdaCase #-}
 
 import Control.Monad ((>=>))
+import Control.Monad.Except (runExceptT)
+import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (traverse_)
-import Data.Semigroup ((<>))
 import System.Environment (getArgs)
+import System.Exit (die)
 
 import Notmuch
 import Notmuch.Search
@@ -37,10 +39,9 @@ main = getArgs >>= \case
   _ -> putStrLn "usage: hs-notmuch-files DB-DIR SEARCH-TERM"
 
 go :: String -> String -> IO ()
-go dbDir searchTerm = do
-  (databaseOpen dbDir :: IO (Either Status (Database RO)))
-  >>= either
-    (putStrLn . (("Error: " <>) . show))
-    (flip query (Bare searchTerm)
-      >=> messages
-      >=> traverse_ (messageFilename >=> putStrLn))
+go dbDir searchTerm = runExceptT (
+    databaseOpenReadOnly dbDir
+    >>= (flip query (Bare searchTerm)
+          >=> messages
+          >=> traverse_ (messageFilename >=> (liftIO . putStrLn)))
+  ) >>= either (die . show) pure

@@ -15,6 +15,7 @@
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 {-|
 
@@ -86,7 +87,8 @@ module Notmuch
   ) where
 
 import Control.Exception (bracket)
-import Control.Monad (void)
+import Control.Monad.Except (MonadError(..))
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.Foldable (traverse_)
 
 import qualified Data.ByteString as B
@@ -105,23 +107,23 @@ import Notmuch.Search
 --
 
 class HasTags a where
-  tags :: a -> IO [Tag]
+  tags :: MonadIO m => a -> m [Tag]
 
 instance HasTags (Database a) where
-  tags = database_get_all_tags
+  tags = liftIO . database_get_all_tags
 
 instance HasTags (Thread a) where
-  tags = thread_get_tags
+  tags = liftIO . thread_get_tags
 
 instance HasTags Messages where
-  tags = messages_collect_tags
+  tags = liftIO . messages_collect_tags
 
 instance HasTags (Message n a) where
-  tags = message_get_tags
+  tags = liftIO . message_get_tags
 
 
 class HasMessages a where
-  messages :: a m -> IO [Message 0 m]
+  messages :: (MonadError Status m, MonadIO m) => a mode -> m [Message 0 mode]
 
 instance HasMessages Query where
   messages = query_search_messages
@@ -135,24 +137,28 @@ instance HasMessages (Message n) where
 
 
 class HasThreads a where
-  threads :: a m -> IO [Thread m]
+  threads :: MonadIO m => a mode -> m [Thread mode]
 
 
 class HasThread a where
-  threadId :: a -> IO ThreadId
+  threadId :: MonadIO m => a -> m ThreadId
 
 instance HasThread (Thread a) where
-  threadId = thread_get_thread_id
+  threadId = liftIO . thread_get_thread_id
 
 instance HasThread (Message n a) where
-  threadId = message_get_thread_id
+  threadId = liftIO . message_get_thread_id
 
 
-databaseOpen :: Mode a => FilePath -> IO (Either Status (Database a))
+databaseOpen
+  :: (Mode a, MonadError Status m, MonadIO m)
+  => FilePath -> m (Database a)
 databaseOpen = database_open
 
 -- | Convenience function for opening a database read-only
-databaseOpenReadOnly :: FilePath -> IO (Either Status (Database RO))
+databaseOpenReadOnly
+  :: (MonadError Status m, MonadIO m)
+   => FilePath -> m (Database RO)
 databaseOpenReadOnly = database_open
 
 -- | Close the database and free associated resources
@@ -160,40 +166,41 @@ databaseOpenReadOnly = database_open
 -- Don't use any resources derived from this database
 -- after using this function!
 --
-databaseDestroy :: Database a -> IO ()
-databaseDestroy = void . database_destroy
+databaseDestroy :: (MonadError Status m, MonadIO m) => Database a -> m ()
+databaseDestroy = database_destroy
 
-databaseVersion :: Database a -> IO Int
-databaseVersion = database_get_version
+databaseVersion :: MonadIO m => Database a -> m Int
+databaseVersion = liftIO . database_get_version
 
-findMessage :: Database a -> MessageId -> IO (Either Status (Maybe (Message 0 a)))
+findMessage
+  :: (MonadError Status m, MonadIO m)
+  => Database a -> MessageId -> m (Maybe (Message 0 a))
 findMessage = database_find_message
 
-query :: Database a -> SearchTerm -> IO (Query a)
-query db = query_create db . show
+query :: (MonadIO m) => Database a -> SearchTerm -> m (Query a)
+query db = liftIO . query_create db . show
 
-queryCountMessages :: Query a -> IO Int
+queryCountMessages, queryCountThreads
+  :: (MonadError Status m, MonadIO m) => Query a -> m Int
 queryCountMessages = query_count_messages
-
-queryCountThreads :: Query a -> IO Int
 queryCountThreads = query_count_threads
 
-messageId :: Message n a -> IO MessageId
-messageId = message_get_message_id
+messageId :: MonadIO m => Message n a -> m MessageId
+messageId = liftIO . message_get_message_id
 
-messageDate :: Message n a -> IO (UTCTime)
-messageDate = fmap (posixSecondsToUTCTime . realToFrac) . message_get_date
+messageDate :: MonadIO m => Message n a -> m (UTCTime)
+messageDate = liftIO . fmap (posixSecondsToUTCTime . realToFrac) . message_get_date
 
 -- | Get the named header as a UTF-8 encoded string.
 -- Empty string if header is missing or @Nothing@ on error.
 --
 -- /May open a file descriptor./
 --
-messageHeader :: B.ByteString -> Message n a -> IO (Maybe B.ByteString)
-messageHeader = flip message_get_header
+messageHeader :: MonadIO m => B.ByteString -> Message n a -> m (Maybe B.ByteString)
+messageHeader k = liftIO . flip message_get_header k
 
-messageFilename :: Message n a -> IO FilePath
-messageFilename = message_get_filename
+messageFilename :: MonadIO m => Message n a -> m FilePath
+messageFilename = liftIO . message_get_filename
 
 -- | Freeze the message, run the given computation
 -- and return the result.  The message is always thawed at the end.
@@ -207,6 +214,6 @@ withFrozenMessage k msg = bracket (message_freeze msg) message_thaw k
 
 -- | Set tags for the message.  Atomic.
 --
-messageSetTags :: Foldable t => t Tag -> Message 0 RW -> IO ()
-messageSetTags l = withFrozenMessage $ \msg ->
-  message_remove_all_tags msg *> traverse_ (message_add_tag msg) l
+messageSetTags :: MonadIO m => Foldable t => t Tag -> Message 0 RW -> m ()
+messageSetTags l = liftIO . withFrozenMessage (\msg ->
+  message_remove_all_tags msg *> traverse_ (message_add_tag msg) l)

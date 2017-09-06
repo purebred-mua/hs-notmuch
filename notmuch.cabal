@@ -27,6 +27,7 @@ library
   build-depends:
     base >= 4.9 && <5
     , bytestring >= 0.10 && < 0.11
+    , mtl >= 2 && < 3
     , time
 
   build-tools:
@@ -47,6 +48,7 @@ executable hs-notmuch-files
   main-is: Files.hs
   build-depends:
     base         >= 4.9
+    , mtl
     , notmuch
 
 executable hs-notmuch-tag-message
@@ -57,4 +59,5 @@ executable hs-notmuch-tag-message
   build-depends:
     base         >= 4.9
     , bytestring
+    , mtl
     , notmuch

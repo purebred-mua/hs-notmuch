@@ -23,8 +23,10 @@ Set the tags on a specific message
 {-# LANGUAGE LambdaCase #-}
 
 import Control.Exception (bracket)
+import Control.Monad (void)
+import Control.Monad.Except (runExceptT)
+import Control.Monad.IO.Class (liftIO)
 import Data.Maybe (fromMaybe)
-import Data.Semigroup ((<>))
 import System.Environment (getArgs)
 import System.Exit (die)
 
@@ -40,12 +42,13 @@ main = getArgs >>= \case
 
 go :: String -> String -> [String] -> IO ()
 go dbDir msgId l = bracket
-  (databaseOpen dbDir >>= either (die . ("Error: " <>) . show) pure)
-  databaseDestroy
-  (\db -> do
+  (runExceptT (databaseOpen dbDir) >>= either (die . show) pure)
+  (void . runExceptT . databaseDestroy)
+  (\db -> runExceptT (
     let l' = fromMaybe (error "Bad tag(s)") (traverse (mkTag . C.pack) l)
-    findMessage db (C.pack msgId)
+    in findMessage db (C.pack msgId)
       >>= \case
-        Left e -> putStrLn ("Error: " <> show e)
-        Right Nothing -> putStrLn "Message not found"
-        Right (Just msg) -> messageSetTags l' msg)
+        Nothing -> liftIO $ putStrLn "Message not found"
+        Just msg -> messageSetTags l' msg
+    ) >>= either (die . show) pure
+  )

@@ -14,6 +14,7 @@
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
@@ -24,6 +25,8 @@
 module Notmuch.Binding where
 
 import Control.Monad ((>=>), (<=<), void)
+import Control.Monad.Except (MonadError(..))
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.Coerce (coerce)
 import Data.Functor.Identity (Identity(..))
 import Data.Proxy
@@ -116,38 +119,56 @@ status :: Functor f => f a -> Status -> f (Either Status a)
 status a StatusSuccess = Right <$> a
 status a e = Left e <$ a
 
+toStatus :: (Integral a, Enum b) => a -> b
+toStatus = toEnum . fromIntegral
+
 
 class Mode a where
   getMode :: Proxy a -> DatabaseMode
-  upgrade :: Database a -> IO (Either Status (Database a))
+  upgrade :: (MonadError Status m, MonadIO m) => Database a -> m (Database a)
 
 instance Mode 'DatabaseModeReadOnly where
   getMode _ = DatabaseModeReadOnly
-  upgrade = pure . Right
+  upgrade = pure
 
 instance Mode 'DatabaseModeReadWrite where
   getMode _ = DatabaseModeReadWrite
-  upgrade db = do
-    toEnum . fromIntegral <$> withDatabase db (\dbPtr ->
-      {#call database_upgrade #} dbPtr nullFunPtr nullPtr)
-    >>= status (pure db)
+  upgrade db =
+    liftIO (toEnum . fromIntegral <$> withDatabase db (\dbPtr ->
+      {#call database_upgrade #} dbPtr nullFunPtr nullPtr))
+    >>= \rv -> case rv of
+      StatusSuccess -> pure db
+      e -> throwError e
 
 -- | Open a Notmuch database
 --
 -- The database has no finaliser and will remain open even if GC'd.
 --
-database_open :: forall a. Mode a => FilePath -> IO (Either Status (Database a))
-database_open s = withCString s (\s' -> (fmap . fmap) runIdentity $
-  constructF
-    (pure . Identity)
-    (Database . DatabaseHandle)
-    ({#call database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
-    Nothing  -- no destructor
-  ) >>= either (pure . Left) upgrade
+database_open
+  :: forall a m. (Mode a, MonadError Status m, MonadIO m)
+  => FilePath
+  -> m (Database a)
+database_open s =
+  liftIO (
+    withCString s (\s' -> (fmap . fmap) runIdentity $
+      constructF
+        (pure . Identity)
+        (Database . DatabaseHandle)
+        ({#call database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
+        Nothing  -- no destructor
+    ))
+  >>= either throwError upgrade
 
-database_destroy :: Database a -> IO Status
+database_destroy :: (MonadError Status m, MonadIO m) => Database a -> m ()
 database_destroy db =
-  toEnum . fromIntegral <$> withDatabase db {#call database_destroy #}
+#if LIBNOTMUCH_CHECK_VERSION(4,1,0)
+  liftIO (
+    toStatus <$> withDatabase db {#call database_destroy #}
+    >>= status (pure ())
+  ) >>= either throwError pure
+#else
+  liftIO (withDatabase db {#call database_destroy #})
+#endif
 
 -- notmuch_status_t notmuch_database_compact(path, backup_path, status_cb, closure)
 
@@ -171,30 +192,37 @@ database_get_version db =
 -- notmuch_database_remove_message
 
 database_find_message
-  :: Database a
+  :: (MonadError Status m, MonadIO m)
+  => Database a
   -> MessageId
-  -> IO (Either Status (Maybe (Message 0 a)))
-database_find_message db s =
-  withDatabase db $ \db' ->
-    B.useAsCString s $ \s' ->
-      constructF
-        (\ptr -> if ptr /= nullPtr then Just <$> detachPtr ptr else pure Nothing)
-        (Message . MessageHandle)
-        ({#call database_find_message #} db' s')
-        (Just message_destroy)
+  -> m (Maybe (Message 0 a))
+database_find_message =
+  database_find_message_x B.useAsCString {#call database_find_message #}
 
 database_find_message_by_filename
-  :: Database a -- ^ Database
+  :: (MonadError Status m, MonadIO m)
+  => Database a -- ^ Database
   -> FilePath   -- ^ Filename
-  -> IO (Either Status (Maybe (Message 0 a)))
-database_find_message_by_filename db s =
-  withDatabase db $ \db' ->
-    withCString s $ \s' ->
+  -> m (Maybe (Message 0 a))
+database_find_message_by_filename =
+  database_find_message_x withCString {#call database_find_message_by_filename #}
+
+database_find_message_x
+  :: (MonadError Status m, MonadIO m)
+  => (s -> (s' -> IO (Either Status (Maybe (Message 0 a)))) -> IO (Either Status (Maybe (Message 0 a))))
+  -> (Ptr DatabaseHandle -> s' -> Ptr (Ptr MessageHandle) -> IO CInt)
+  -> Database a -- ^ Database
+  -> s
+  -> m (Maybe (Message 0 a))
+database_find_message_x prep f db s =
+  liftIO (withDatabase db $ \db' ->
+    prep s $ \s' ->
       constructF
         (\ptr -> if ptr /= nullPtr then Just <$> detachPtr ptr else pure Nothing)
         (Message . MessageHandle)
-        ({#call database_find_message_by_filename #} db' s')
-        (Just message_destroy)
+        (f db' s')
+        (Just message_destroy) )
+  >>= either throwError pure
 
 -- TODO: check for NULL, indicating error
 database_get_all_tags :: Database a -> IO [Tag]
@@ -225,32 +253,76 @@ query_get_sort ptr = withQuery ptr $
   fmap (toEnum . fromIntegral) . {#call query_get_sort #}
 
 query_add_tag_exclude :: Query a -> Tag -> IO ()
-query_add_tag_exclude ptr (Tag s) =
+query_add_tag_exclude ptr (Tag s) = void $
   withQuery ptr $ \ptr' ->
     B.useAsCString s $ \s' ->
       {#call query_add_tag_exclude #} ptr' s'
 
-query_search_threads :: Query a -> IO [Thread a]
-query_search_threads ptr = withQuery ptr $ \ptr' ->
-  {#call query_search_threads #} ptr'
-     >>= detachPtr
-     >>= newForeignPtr threads_destroy
-     >>= threadsToList . Threads
+query_search_threads
+  :: (MonadError Status m, MonadIO m)
+  => Query a -> m [Thread a]
+query_search_threads q =
+#if LIBNOTMUCH_CHECK_VERSION(5,0,0)
+  liftIO ( withQuery q $ \qPtr ->
+    constructF
+      (fmap Identity . detachPtr)
+      Threads
+      ({#call query_search_threads #} qPtr)
+      (Just threads_destroy) )
+  >>= either throwError (liftIO . threadsToList . runIdentity)
+#else
+  liftIO $ withQuery q $ \qPtr ->
+    {#call query_search_threads #} qPtr
+      >>= detachPtr
+      >>= newForeignPtr threads_destroy
+      >>= threadsToList . Threads
+#endif
 
-query_search_messages :: Query a -> IO [Message 0 a]
-query_search_messages ptr = withQuery ptr $ \ptr' ->
-  {#call query_search_messages #} ptr'
-    >>= detachPtr
-    >>= newForeignPtr messages_destroy
-    >>= messagesToList . Messages
+query_search_messages
+  :: (MonadError Status m, MonadIO m)
+  => Query a -> m [Message 0 a]
+query_search_messages q =
+#if LIBNOTMUCH_CHECK_VERSION(5,0,0)
+  liftIO ( withQuery q $ \qPtr ->
+    constructF
+      (fmap Identity . detachPtr)
+      Messages
+      ({#call query_search_messages #} qPtr)
+      (Just messages_destroy) )
+  >>= either throwError (liftIO . messagesToList . runIdentity)
+#else
+  liftIO $ withQuery q $ \qPtr ->
+    {#call query_search_messages #} qPtr
+      >>= detachPtr
+      >>= newForeignPtr messages_destroy
+      >>= messagesToList . Messages
+#endif
 
-query_count_messages :: Query a -> IO Int
-query_count_messages query =
-  fromIntegral <$> withQuery query {#call query_count_messages #}
+query_count_x
+  :: (MonadError Status m, MonadIO m)
+#if LIBNOTMUCH_CHECK_VERSION(5,0,0)
+  => (Ptr QueryHandle -> Ptr CUInt -> IO CInt)
+#else
+  => (Ptr QueryHandle -> IO CUInt)
+#endif
+  -> Query a -> m Int
+query_count_x f q = fmap fromIntegral $
+#if LIBNOTMUCH_CHECK_VERSION(5,0,0)
+  liftIO (
+    withQuery q $ \qPtr ->
+      alloca $ \intPtr ->
+        toStatus <$> f qPtr intPtr
+        >>= status (peek intPtr)
+  ) >>= either throwError pure
+#else
+  liftIO $ withQuery q f
+#endif
 
-query_count_threads :: Query a -> IO Int
-query_count_threads query =
-  fromIntegral <$> withQuery query {#call query_count_threads #}
+query_count_messages, query_count_threads
+  :: (MonadError Status m, MonadIO m) => Query a -> m Int
+query_count_messages = query_count_x {#call query_count_messages #}
+query_count_threads = query_count_x {#call query_count_threads #}
+
 
 thread_get_thread_id :: Thread a -> IO ThreadId
 thread_get_thread_id ptr =
@@ -259,8 +331,8 @@ thread_get_thread_id ptr =
 -- notmuch_thread_get_total_messages
 -- notmuch_thread_get_toplevel_messages -> Messages
 
-thread_get_messages :: Thread a -> IO [Message 0 a]
-thread_get_messages ptr = withThread ptr $ \ptr' ->
+thread_get_messages :: MonadIO m => Thread a -> m [Message 0 a]
+thread_get_messages ptr = liftIO $ withThread ptr $ \ptr' ->
   {#call thread_get_messages #} ptr'
     >>= detachPtr
     >>= newForeignPtr messages_destroy
@@ -294,8 +366,8 @@ message_get_thread_id :: Message n a -> IO ThreadId
 message_get_thread_id ptr =
   withMessage ptr ({#call message_get_thread_id #} >=> B.packCString)
 
-message_get_replies :: Message n a -> IO [Message 0 a]
-message_get_replies ptr = withMessage ptr $ \ptr' ->
+message_get_replies :: MonadIO m => Message n a -> m [Message 0 a]
+message_get_replies ptr = liftIO $ withMessage ptr $ \ptr' ->
   {#call message_get_replies #} ptr'
     >>= detachPtr
     >>= newForeignPtr messages_destroy
