@@ -18,6 +18,7 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -27,9 +28,13 @@ module Notmuch.Binding where
 import Control.Monad ((>=>), (<=<), void)
 import Control.Monad.Except (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
+import Control.Monad.Reader (MonadReader, asks)
 import Data.Coerce (coerce)
 import Data.Functor.Identity (Identity(..))
 import Data.Proxy
+import Data.Profunctor (Choice)
+import Data.Profunctor.Unsafe ((#.), (.#))
+import Data.Tagged (Tagged(..))
 import GHC.TypeLits
 
 #include <notmuch.h>
@@ -84,6 +89,24 @@ instance Show Status where
   show a = System.IO.Unsafe.unsafePerformIO $
     {#call status_to_string #} (fromEnum' a) >>= peekCString
 
+newtype NotmuchError = NotmuchError Status
+
+type Prism s t a b = forall p f. (Choice p, Applicative f) => p a (f b) -> p s (f t)
+type Prism' s a = Prism s s a a
+
+review :: MonadReader b m => Prism' t b -> m t
+review p = asks (runIdentity #. unTagged #. p .# Tagged .# Identity)
+{-# INLINE review #-}
+
+class AsNotmuchError s where
+  _NotmuchError :: Prism' s Status
+
+instance AsNotmuchError Status where
+  _NotmuchError = id
+
+throwOr :: (AsNotmuchError e, MonadError e m) => (a -> m b) -> Either Status a -> m b
+throwOr = either (throwError . review _NotmuchError)
+
 -- | Read-only database mode
 type RO = 'DatabaseModeReadOnly
 
@@ -125,7 +148,7 @@ toStatus = toEnum . fromIntegral
 
 class Mode a where
   getMode :: Proxy a -> DatabaseMode
-  upgrade :: (MonadError Status m, MonadIO m) => Database a -> m (Database a)
+  upgrade :: (AsNotmuchError e, MonadError e m, MonadIO m) => Database a -> m (Database a)
 
 instance Mode 'DatabaseModeReadOnly where
   getMode _ = DatabaseModeReadOnly
@@ -138,14 +161,14 @@ instance Mode 'DatabaseModeReadWrite where
       {#call database_upgrade #} dbPtr nullFunPtr nullPtr))
     >>= \rv -> case rv of
       StatusSuccess -> pure db
-      e -> throwError e
+      e -> throwError $ review _NotmuchError e
 
 -- | Open a Notmuch database
 --
 -- The database has no finaliser and will remain open even if GC'd.
 --
 database_open
-  :: forall a m. (Mode a, MonadError Status m, MonadIO m)
+  :: forall a e m. (AsNotmuchError e, Mode a, MonadError e m, MonadIO m)
   => FilePath
   -> m (Database a)
 database_open s =
@@ -157,15 +180,15 @@ database_open s =
         ({#call database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
         Nothing  -- no destructor
     ))
-  >>= either throwError upgrade
+  >>= throwOr upgrade
 
-database_destroy :: (MonadError Status m, MonadIO m) => Database a -> m ()
+database_destroy :: (AsNotmuchError e, MonadError e m, MonadIO m) => Database a -> m ()
 database_destroy db =
 #if LIBNOTMUCH_CHECK_VERSION(4,1,0)
   liftIO (
     toStatus <$> withDatabase db {#call database_destroy #}
     >>= status (pure ())
-  ) >>= either throwError pure
+  ) >>= throwOr pure
 #else
   liftIO (withDatabase db {#call database_destroy #})
 #endif
@@ -192,7 +215,7 @@ database_get_version db =
 -- notmuch_database_remove_message
 
 database_find_message
-  :: (MonadError Status m, MonadIO m)
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Database a
   -> MessageId
   -> m (Maybe (Message 0 a))
@@ -200,7 +223,7 @@ database_find_message =
   database_find_message_x B.useAsCString {#call database_find_message #}
 
 database_find_message_by_filename
-  :: (MonadError Status m, MonadIO m)
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Database a -- ^ Database
   -> FilePath   -- ^ Filename
   -> m (Maybe (Message 0 a))
@@ -208,7 +231,7 @@ database_find_message_by_filename =
   database_find_message_x withCString {#call database_find_message_by_filename #}
 
 database_find_message_x
-  :: (MonadError Status m, MonadIO m)
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => (s -> (s' -> IO (Either Status (Maybe (Message 0 a)))) -> IO (Either Status (Maybe (Message 0 a))))
   -> (Ptr DatabaseHandle -> s' -> Ptr (Ptr MessageHandle) -> IO CInt)
   -> Database a -- ^ Database
@@ -222,7 +245,7 @@ database_find_message_x prep f db s =
         (Message . MessageHandle)
         (f db' s')
         (Just message_destroy) )
-  >>= either throwError pure
+  >>= throwOr pure
 
 -- TODO: check for NULL, indicating error
 database_get_all_tags :: Database a -> IO [Tag]
@@ -259,7 +282,7 @@ query_add_tag_exclude ptr (Tag s) = void $
       {#call query_add_tag_exclude #} ptr' s'
 
 query_search_threads
-  :: (MonadError Status m, MonadIO m)
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Query a -> m [Thread a]
 query_search_threads q =
 #if LIBNOTMUCH_CHECK_VERSION(5,0,0)
@@ -269,7 +292,7 @@ query_search_threads q =
       Threads
       ({#call query_search_threads #} qPtr)
       (Just threads_destroy) )
-  >>= either throwError (liftIO . threadsToList . runIdentity)
+  >>= throwOr (liftIO . threadsToList . runIdentity)
 #else
   liftIO $ withQuery q $ \qPtr ->
     {#call query_search_threads #} qPtr
@@ -279,7 +302,7 @@ query_search_threads q =
 #endif
 
 query_search_messages
-  :: (MonadError Status m, MonadIO m)
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Query a -> m [Message 0 a]
 query_search_messages q =
 #if LIBNOTMUCH_CHECK_VERSION(5,0,0)
@@ -289,7 +312,7 @@ query_search_messages q =
       Messages
       ({#call query_search_messages #} qPtr)
       (Just messages_destroy) )
-  >>= either throwError (liftIO . messagesToList . runIdentity)
+  >>= throwOr (liftIO . messagesToList . runIdentity)
 #else
   liftIO $ withQuery q $ \qPtr ->
     {#call query_search_messages #} qPtr
@@ -299,7 +322,7 @@ query_search_messages q =
 #endif
 
 query_count_x
-  :: (MonadError Status m, MonadIO m)
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
 #if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   => (Ptr QueryHandle -> Ptr CUInt -> IO CInt)
 #else
@@ -313,13 +336,13 @@ query_count_x f q = fmap fromIntegral $
       alloca $ \intPtr ->
         toStatus <$> f qPtr intPtr
         >>= status (peek intPtr)
-  ) >>= either throwError pure
+  ) >>= throwOr pure
 #else
   liftIO $ withQuery q f
 #endif
 
 query_count_messages, query_count_threads
-  :: (MonadError Status m, MonadIO m) => Query a -> m Int
+  :: (AsNotmuchError e, MonadError e m, MonadIO m) => Query a -> m Int
 query_count_messages = query_count_x {#call query_count_messages #}
 query_count_threads = query_count_x {#call query_count_threads #}
 
