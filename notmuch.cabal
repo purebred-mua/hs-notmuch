@@ -4,16 +4,27 @@
 name:                notmuch
 version:             0.1.0.0
 synopsis:            Haskell binding to Notmuch, the mail indexer
--- description:         
+description:
+  Binding to the notmuch mail indexer, providing a hopefully
+  somewhat typesafe way to search your email.
 license:             GPL-3
 license-file:        gpl-3.0.txt
+extra-source-files:
+  README.rst
 author:              Fraser Tweedale
 maintainer:          frase@frase.id.au
 copyright:           Copyright (C) 2014  Fraser Tweedale
 category:            FFI
 build-type:          Simple
--- extra-source-files:  
 cabal-version:       >=1.10
+tested-with:
+  GHC==8.0.2, GHC==8.2.1
+
+homepage:            https://github.com/purebred-mua/hs-notmuch
+bug-reports:         https://github.com/purebred-mua/hs-notmuch/issues
+source-repository head
+  type: git
+  location: https://github.com/purebred-mua/hs-notmuch.git
 
 library
   exposed-modules:
