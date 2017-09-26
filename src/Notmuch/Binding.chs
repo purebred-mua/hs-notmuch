@@ -86,8 +86,6 @@ instance Show Status where
   show a = System.IO.Unsafe.unsafePerformIO $
     {#call status_to_string #} (fromEnum' a) >>= peekCString
 
-newtype NotmuchError = NotmuchError Status
-
 class AsNotmuchError s where
   _NotmuchError :: Prism' s Status
 
