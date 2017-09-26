@@ -55,6 +55,7 @@ module Notmuch
   , MessageId
   , ThreadId
 
+  -- * Working with the database
   , Database
   , RO
   , RW
@@ -64,6 +65,7 @@ module Notmuch
   , databaseVersion
   , findMessage
 
+  -- * Querying the database
   , Query
   , query
   , queryCountMessages
@@ -71,6 +73,7 @@ module Notmuch
 
   , Thread
 
+  -- * Working with messages
   , Message
   , messageId
   , messageDate
@@ -83,7 +86,9 @@ module Notmuch
   , HasThreads(..)
   , HasThread(..)
 
+  -- * Errors
   , Status(..)
+  , AsNotmuchError(..)
   ) where
 
 import Control.Exception (bracket)
