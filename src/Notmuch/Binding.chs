@@ -18,7 +18,6 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -28,14 +27,12 @@ module Notmuch.Binding where
 import Control.Monad ((>=>), (<=<), void)
 import Control.Monad.Except (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.Reader (MonadReader, asks)
 import Data.Coerce (coerce)
 import Data.Functor.Identity (Identity(..))
 import Data.Proxy
-import Data.Profunctor (Choice)
-import Data.Profunctor.Unsafe ((#.), (.#))
-import Data.Tagged (Tagged(..))
 import GHC.TypeLits
+
+import Notmuch.Util
 
 #include <notmuch.h>
 {#context prefix = "notmuch" #}
@@ -90,13 +87,6 @@ instance Show Status where
     {#call status_to_string #} (fromEnum' a) >>= peekCString
 
 newtype NotmuchError = NotmuchError Status
-
-type Prism s t a b = forall p f. (Choice p, Applicative f) => p a (f b) -> p s (f t)
-type Prism' s a = Prism s s a a
-
-review :: MonadReader b m => Prism' t b -> m t
-review p = asks (runIdentity #. unTagged #. p .# Tagged .# Identity)
-{-# INLINE review #-}
 
 class AsNotmuchError s where
   _NotmuchError :: Prism' s Status

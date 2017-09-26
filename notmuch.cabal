@@ -30,6 +30,7 @@ library
   exposed-modules:
     Notmuch
     Notmuch.Search
+    Notmuch.Util
 
   other-modules:
     Notmuch.Binding
