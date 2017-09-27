@@ -22,17 +22,16 @@ Set the tags on a specific message
 
 {-# LANGUAGE LambdaCase #-}
 
-import Control.Exception (bracket)
-import Control.Monad (void)
+import Control.Monad ((>=>))
 import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
-import Data.Maybe (fromMaybe)
 import System.Environment (getArgs)
 import System.Exit (die)
 
 import qualified Data.ByteString.Char8 as C
 
 import Notmuch
+import Notmuch.Util (bracketT)
 
 
 main :: IO ()
@@ -41,14 +40,12 @@ main = getArgs >>= \case
   _ -> putStrLn "usage: hs-notmuch-tag-message DB-DIR MESSAGE-ID TAG..."
 
 go :: String -> String -> [String] -> IO ()
-go dbDir msgId l = bracket
-  (runExceptT (databaseOpen dbDir) >>= either (die . show) pure)
-  (void . runExceptT . databaseDestroy)
-  (\db -> runExceptT (
-    let l' = fromMaybe (error "Bad tag(s)") (traverse (mkTag . C.pack) l)
-    in findMessage db (C.pack msgId)
-      >>= \case
+go dbDir msgId l = do
+  l' <- maybe (die "Bad tag(s)") pure (traverse (mkTag . C.pack) l)
+  runExceptT (
+    bracketT (databaseOpen dbDir) databaseDestroy
+    ( flip findMessage (C.pack msgId)
+      >=> \case
         Nothing -> liftIO $ putStrLn "Message not found"
-        Just msg -> messageSetTags l' msg
-    ) >>= either (die . show) pure
-  )
+        Just msg -> messageSetTags l' msg )
+    ) >>= either (die . (show :: Status -> String)) pure

@@ -44,4 +44,4 @@ go dbDir searchTerm = runExceptT (
     >>= (flip query (Bare searchTerm)
           >=> messages
           >=> traverse_ (messageFilename >=> (liftIO . putStrLn)))
-  ) >>= either (die . show) pure
+  ) >>= either (die . (show :: Status -> String)) pure

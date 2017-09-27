@@ -24,7 +24,11 @@ do want to expose in the library interface.
 
 module Notmuch.Util where
 
+import Control.Exception (bracket)
+import Control.Monad.Except (MonadError, ExceptT, runExceptT, throwError)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader, asks)
+import Data.Foldable (traverse_)
 import Data.Functor.Identity (Identity(..))
 import Data.Profunctor (Choice)
 import Data.Profunctor.Unsafe ((#.), (.#))
@@ -36,3 +40,20 @@ type Prism' s a = Prism s s a a
 review :: MonadReader b m => Prism' t b -> m t
 review p = asks (runIdentity #. unTagged #. p .# Tagged .# Identity)
 {-# INLINE review #-}
+
+-- | Variant of 'bracket' that works with ExceptT and allows
+-- resource acquisition to fail, propagating the error.  If
+-- resource finalisation fails, the error is discarded.
+--
+bracketT
+  :: (MonadError e m, MonadIO m)
+  => ExceptT e IO a
+  -> (a -> ExceptT e IO b)
+  -> (a -> ExceptT e IO c)
+  -> m c
+bracketT acq rel go = liftIO (
+  bracket
+    (runExceptT acq)
+    (runExceptT . traverse_ rel)
+    (runExceptT . either throwError go)
+  ) >>= either throwError pure

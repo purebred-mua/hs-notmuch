@@ -128,7 +128,9 @@ instance HasTags (Message n a) where
 
 
 class HasMessages a where
-  messages :: (MonadError Status m, MonadIO m) => a mode -> m [Message 0 mode]
+  messages
+    :: (AsNotmuchError e, MonadError e m, MonadIO m)
+    => a mode -> m [Message 0 mode]
 
 instance HasMessages Query where
   messages = query_search_messages
@@ -156,13 +158,13 @@ instance HasThread (Message n a) where
 
 
 databaseOpen
-  :: (Mode a, MonadError Status m, MonadIO m)
+  :: (Mode a, AsNotmuchError e, MonadError e m, MonadIO m)
   => FilePath -> m (Database a)
 databaseOpen = database_open
 
 -- | Convenience function for opening a database read-only
 databaseOpenReadOnly
-  :: (MonadError Status m, MonadIO m)
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
    => FilePath -> m (Database RO)
 databaseOpenReadOnly = database_open
 
@@ -171,14 +173,16 @@ databaseOpenReadOnly = database_open
 -- Don't use any resources derived from this database
 -- after using this function!
 --
-databaseDestroy :: (MonadError Status m, MonadIO m) => Database a -> m ()
+databaseDestroy
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
+  => Database a -> m ()
 databaseDestroy = database_destroy
 
 databaseVersion :: MonadIO m => Database a -> m Int
 databaseVersion = liftIO . database_get_version
 
 findMessage
-  :: (MonadError Status m, MonadIO m)
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Database a -> MessageId -> m (Maybe (Message 0 a))
 findMessage = database_find_message
 
@@ -186,7 +190,8 @@ query :: (MonadIO m) => Database a -> SearchTerm -> m (Query a)
 query db = liftIO . query_create db . show
 
 queryCountMessages, queryCountThreads
-  :: (MonadError Status m, MonadIO m) => Query a -> m Int
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
+  => Query a -> m Int
 queryCountMessages = query_count_messages
 queryCountThreads = query_count_threads
 
