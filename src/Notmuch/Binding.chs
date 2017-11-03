@@ -340,7 +340,13 @@ thread_get_thread_id ptr =
   withThread ptr ({#call thread_get_thread_id #} >=> B.packCString)
 
 -- notmuch_thread_get_total_messages
--- notmuch_thread_get_toplevel_messages -> Messages
+
+thread_get_toplevel_messages :: MonadIO m => Thread a -> m [Message 0 a]
+thread_get_toplevel_messages ptr = liftIO $ withThread ptr $ \ptr' ->
+  {#call thread_get_toplevel_messages #} ptr'
+    >>= detachPtr
+    >>= newForeignPtr messages_destroy
+    >>= messagesToList . Messages
 
 thread_get_messages :: MonadIO m => Thread a -> m [Message 0 a]
 thread_get_messages ptr = liftIO $ withThread ptr $ \ptr' ->

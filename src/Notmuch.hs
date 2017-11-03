@@ -72,6 +72,7 @@ module Notmuch
   , queryCountThreads
 
   , Thread
+  , threadToplevelMessages
 
   -- * Working with messages
   , Message
@@ -142,10 +143,18 @@ instance HasMessages (Message n) where
   messages = message_get_replies
   -- replies!
 
-
 class HasThreads a where
-  threads :: MonadIO m => a mode -> m [Thread mode]
+  threads
+    :: (AsNotmuchError e, MonadError e m, MonadIO m)
+    => a mode -> m [Thread mode]
 
+instance HasThreads Query where
+  threads = query_search_threads
+
+threadToplevelMessages
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
+  => Thread a -> m [Message 0 a]
+threadToplevelMessages = thread_get_toplevel_messages
 
 class HasThread a where
   threadId :: MonadIO m => a -> m ThreadId
