@@ -37,6 +37,8 @@ import Data.Tagged (Tagged(..))
 type Prism s t a b = forall p f. (Choice p, Applicative f) => p a (f b) -> p s (f t)
 type Prism' s a = Prism s s a a
 
+type Lens' a b = forall f. Functor f => (b -> f b) -> (a -> f a)
+
 review :: MonadReader b m => Prism' t b -> m t
 review p = asks (runIdentity #. unTagged #. p .# Tagged .# Identity)
 {-# INLINE review #-}

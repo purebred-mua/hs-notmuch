@@ -339,7 +339,9 @@ thread_get_thread_id :: Thread a -> IO ThreadId
 thread_get_thread_id ptr =
   withThread ptr ({#call thread_get_thread_id #} >=> B.packCString)
 
--- notmuch_thread_get_total_messages
+thread_get_total_messages :: Thread a -> IO Int
+thread_get_total_messages ptr =
+  fromIntegral <$> withThread ptr ({#call thread_get_total_messages #})
 
 thread_get_toplevel_messages :: MonadIO m => Thread a -> m [Message 0 a]
 thread_get_toplevel_messages ptr = liftIO $ withThread ptr $ \ptr' ->
@@ -356,10 +358,19 @@ thread_get_messages ptr = liftIO $ withThread ptr $ \ptr' ->
     >>= messagesToList . Messages
 
 -- notmuch_thread_get_matched_messages -> Int
--- notmuch_thread_get_authors -> String
--- notmuch_thread_get_subject
+
+thread_get_authors :: Thread a -> IO (Maybe B.ByteString)
+thread_get_authors ptr = withThread ptr $ \ptr' -> do
+  r <- {#call thread_get_authors #} ptr'
+  if r == nullPtr
+     then pure Nothing
+     else Just <$> B.packCString r
+
+thread_get_subject :: Thread a -> IO B.ByteString
+thread_get_subject ptr = withThread ptr ({#call thread_get_subject #} >=> B.packCString)
 -- notmuch_thread_get_oldest_date
--- notmuch_thread_get_newest_date
+thread_get_newest_date :: Thread a -> IO CLong
+thread_get_newest_date = flip withThread {#call thread_get_newest_date #}
 
 thread_get_tags :: Thread a -> IO [Tag]
 thread_get_tags ptr = withThread ptr $ \ptr' ->
