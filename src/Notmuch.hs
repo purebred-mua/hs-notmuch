@@ -54,6 +54,8 @@ module Notmuch
   , getTag
   , MessageId
   , ThreadId
+  , ThreadAuthors
+  , Author
 
   -- * Working with the database
   , Database
@@ -71,8 +73,16 @@ module Notmuch
   , queryCountMessages
   , queryCountThreads
 
+  -- * Working with threads
   , Thread
   , threadToplevelMessages
+  , threadNewestDate
+  , threadSubject
+  , threadAuthors
+  , threadTotalMessages
+  -- ** Optics
+  , matchedAuthors
+  , unmatchedAuthors
 
   -- * Working with messages
   , Message
@@ -98,11 +108,14 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Data.Foldable (traverse_)
 
 import qualified Data.ByteString as B
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 
 import Notmuch.Binding
 import Notmuch.Search
+import Notmuch.Util
 
 --
 -- PUBLIC API
@@ -151,11 +164,6 @@ class HasThreads a where
 instance HasThreads Query where
   threads = query_search_threads
 
-threadToplevelMessages
-  :: (AsNotmuchError e, MonadError e m, MonadIO m)
-  => Thread a -> m [Message 0 a]
-threadToplevelMessages = thread_get_toplevel_messages
-
 class HasThread a where
   threadId :: MonadIO m => a -> m ThreadId
 
@@ -164,7 +172,6 @@ instance HasThread (Thread a) where
 
 instance HasThread (Message n a) where
   threadId = liftIO . message_get_thread_id
-
 
 databaseOpen
   :: (Mode a, AsNotmuchError e, MonadError e m, MonadIO m)
@@ -236,3 +243,50 @@ withFrozenMessage k msg = bracket (message_freeze msg) message_thaw k
 messageSetTags :: MonadIO m => Foldable t => t Tag -> Message 0 RW -> m ()
 messageSetTags l = liftIO . withFrozenMessage (\msg ->
   message_remove_all_tags msg *> traverse_ (message_add_tag msg) l)
+
+-- | Returns only messages in a thread which are not replies to other messages in the thread.
+threadToplevelMessages
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
+  => Thread a -> m [Message 0 a]
+threadToplevelMessages = thread_get_toplevel_messages
+
+-- | Returns the date of the newest message in a 'Thread'.
+threadNewestDate :: MonadIO m => Thread a -> m (UTCTime)
+threadNewestDate = liftIO . fmap (posixSecondsToUTCTime . realToFrac) . thread_get_newest_date
+
+-- | Returns the subject of the first message in the query results that belongs to this thread.
+threadSubject :: MonadIO m => Thread a -> m B.ByteString
+threadSubject = liftIO . thread_get_subject
+
+type Author = T.Text
+
+-- | Authors belonging to messages in a query result of a thread ordered by date.
+data ThreadAuthors = ThreadAuthors
+    { _matchedAuthors :: [Author]
+    -- ^ authors matching the query
+    , _unmatchedAuthors :: [Author]
+    -- ^ non-matched authors
+    } deriving Show
+
+matchedAuthors :: Lens' ThreadAuthors [Author]
+matchedAuthors f (ThreadAuthors a b) = fmap (\a' -> ThreadAuthors a' b) (f a)
+
+unmatchedAuthors :: Lens' ThreadAuthors [Author]
+unmatchedAuthors f (ThreadAuthors a b) = fmap (\b' -> ThreadAuthors a b') (f b)
+
+-- | Return authors of a thread which are split into two groups, both accessible by their optics.
+threadAuthors :: MonadIO m => Thread a -> m ThreadAuthors
+threadAuthors t = do
+  a <- liftIO $ thread_get_authors t
+  pure $ maybe (ThreadAuthors [] []) (convert_authors . T.decodeUtf8) a
+
+convert_authors :: T.Text -> ThreadAuthors
+convert_authors raw =
+  let t = T.breakOn (T.pack "|") raw
+      matched = T.strip <$> (T.splitOn (T.pack ",") $ fst t)
+      unmatched = filter (not . T.null) (T.splitOn (T.pack "|") $ snd t)
+  in ThreadAuthors matched unmatched
+
+-- | All messages in the database belonging to the given 'Thread'.
+threadTotalMessages :: MonadIO m => Thread a -> m Int
+threadTotalMessages = liftIO . thread_get_total_messages
