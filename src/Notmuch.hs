@@ -59,6 +59,7 @@ module Notmuch
 
   -- * Working with the database
   , Database
+  , Mode
   , RO
   , RW
   , databaseOpen
