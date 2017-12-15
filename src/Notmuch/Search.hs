@@ -4,7 +4,8 @@ import Data.Semigroup ((<>))
 
 import qualified Data.ByteString.Char8 as C
 
-import Notmuch.Binding (Tag, MessageId, ThreadId, getTag)
+import Notmuch.Tag (Tag, getTag)
+import Notmuch.Binding (MessageId, ThreadId)
 
 data SearchTerm
   = FreeForm String

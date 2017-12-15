@@ -114,6 +114,7 @@ import qualified Data.Text.Encoding as T
 import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 
+import Notmuch.Tag
 import Notmuch.Binding
 import Notmuch.Search
 import Notmuch.Util

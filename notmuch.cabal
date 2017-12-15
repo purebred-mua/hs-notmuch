@@ -34,6 +34,8 @@ library
 
   other-modules:
     Notmuch.Binding
+    Notmuch.Binding.Constants
+    Notmuch.Tag
     Notmuch.Talloc
 
   build-depends:

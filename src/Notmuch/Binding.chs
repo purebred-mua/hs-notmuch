@@ -34,6 +34,7 @@ import Data.Functor.Identity (Identity(..))
 import Data.Proxy
 import GHC.TypeLits
 
+import Notmuch.Tag
 import Notmuch.Util
 
 #include <notmuch.h>
@@ -57,15 +58,6 @@ import Notmuch.Talloc
 --
 type MessageId = B.ByteString
 type ThreadId = B.ByteString
-
-newtype Tag = Tag { getTag :: B.ByteString }
-
--- | @Just@ a tag, or @Nothing@ if the string is too long
-
-mkTag :: B.ByteString -> Maybe Tag
-mkTag s
-  | B.length s > {#const NOTMUCH_TAG_MAX #} = Nothing
-  | otherwise = Just (Tag s)
 
 --
 -- BINDING API
