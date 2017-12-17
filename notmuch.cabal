@@ -90,3 +90,14 @@ executable hs-notmuch-tag-count
     , mtl
     , containers
     , notmuch
+
+executable hs-notmuch-tag-set
+  default-language:    Haskell2010
+  hs-source-dirs: tools
+  ghc-options: -Wall
+  main-is: TagSet.hs
+  build-depends:
+    base         >= 4.9
+    , bytestring
+    , mtl
+    , notmuch
