@@ -13,9 +13,17 @@
 -- You should have received a copy of the GNU General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-module Notmuch.Tag where
+module Notmuch.Tag
+  (
+    Tag
+  , getTag
+  , mkTag
+  , tagUseAsCString
+  , tagFromCString
+  ) where
 
 import qualified Data.ByteString as B
+import Foreign.C (CString)
 
 import Notmuch.Binding.Constants (tagMaxLen)
 
@@ -30,3 +38,9 @@ mkTag s =
     if w < 1 || w > tagMaxLen
       then Nothing
       else Just (Tag s)
+
+tagUseAsCString :: Tag -> (CString -> IO a) -> IO a
+tagUseAsCString = B.useAsCString . getTag
+
+tagFromCString :: CString -> IO Tag
+tagFromCString = fmap Tag . B.packCString

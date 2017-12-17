@@ -261,9 +261,9 @@ query_get_sort ptr = withQuery ptr $
   fmap (toEnum . fromIntegral) . {#call query_get_sort #}
 
 query_add_tag_exclude :: Query a -> Tag -> IO ()
-query_add_tag_exclude ptr (Tag s) = void $
+query_add_tag_exclude ptr tag = void $
   withQuery ptr $ \ptr' ->
-    B.useAsCString s $ \s' ->
+    tagUseAsCString tag $ \s' ->
       {#call query_add_tag_exclude #} ptr' s'
 
 query_search_threads
@@ -453,8 +453,8 @@ message_remove_all_tags msg = withMessage msg $ \ptr ->
 -- Therefore assume everything worked!
 --
 message_add_tag :: Message n RW -> Tag -> IO ()
-message_add_tag msg (Tag s) = withMessage msg $ \ptr ->
-  B.useAsCString s $ \s' ->
+message_add_tag msg tag = withMessage msg $ \ptr ->
+  tagUseAsCString tag $ \s' ->
     void $ {#call message_add_tag #} ptr s'
 
 -- According to the header file, possible errors are:
@@ -580,7 +580,7 @@ tagsToList = ptrToList
   {#call tags_valid #}
   {#call tags_get #}
   {#call tags_move_to_next #}
-  (fmap Tag . B.packCString)
+  tagFromCString
 
 threadsToList :: Threads -> IO [Thread a]
 threadsToList = lazyPtrToList
