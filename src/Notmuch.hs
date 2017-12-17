@@ -92,6 +92,9 @@ module Notmuch
   , messageHeader
   , messageFilename
   , messageSetTags
+  , messageAddTag
+  , messageRemoveTag
+  , withFrozenMessage
 
   , HasTags(..)
   , HasMessages(..)
@@ -242,6 +245,22 @@ withFrozenMessage k msg = bracket (message_freeze msg) message_thaw k
 messageSetTags :: (MonadIO m, Foldable t) => t Tag -> Message 0 RW -> m ()
 messageSetTags l = liftIO . withFrozenMessage (\msg ->
   message_remove_all_tags msg *> traverse_ (message_add_tag msg) l)
+
+-- | Add the tag to a message.  If adding/removing multiple tags,
+-- use 'messageSetTags' to set the whole tag list atomically, or use
+-- 'withFrozenMessage' to avoid inconsistent states when
+-- adding/removing tags.
+--
+messageAddTag :: (MonadIO m) => Tag -> Message 0 RW -> m ()
+messageAddTag tag msg = liftIO $ message_add_tag msg tag
+
+-- | Remove the tag from a message.  If adding/removing multiple
+-- tags, use 'messageSetTags' to set the whole tag list atomically,
+-- or use 'withFrozenMessage' to avoid inconsistent states when
+-- adding/removing tags.
+--
+messageRemoveTag :: (MonadIO m) => Tag -> Message 0 RW -> m ()
+messageRemoveTag tag msg = liftIO $ message_remove_tag msg tag
 
 -- | Returns only messages in a thread which are not replies to other messages in the thread.
 threadToplevelMessages

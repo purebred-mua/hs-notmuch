@@ -446,16 +446,29 @@ message_remove_all_tags msg = withMessage msg $ \ptr ->
 
 -- According to the header file, possible errors are:
 --
--- * NOTMUCH_STATUS_NULL_POINTER (excluded by @B.useAsCString@)
--- * NOTMUCH_STATUS_TAG_TOO_LONG (excluded by @Tag@ smart constructor)
+-- * NOTMUCH_STATUS_NULL_POINTER (excluded by @Tag@ type)
+-- * NOTMUCH_STATUS_TAG_TOO_LONG (excluded by @Tag@ type)
 -- * NOTMUCH_STATUS_READ_ONLY_DATABASE (excluded by @Message RW@)
 --
 -- Therefore assume everything worked!
 --
 message_add_tag :: Message n RW -> Tag -> IO ()
 message_add_tag msg tag = withMessage msg $ \ptr ->
-  tagUseAsCString tag $ \s' ->
-    void $ {#call message_add_tag #} ptr s'
+  tagUseAsCString tag $ \s ->
+    void $ {#call message_add_tag #} ptr s
+
+-- According to the header file, possible errors are:
+--
+-- * NOTMUCH_STATUS_NULL_POINTER (excluded by @Tag@ type)
+-- * NOTMUCH_STATUS_TAG_TOO_LONG (excluded by @Tag@ type)
+-- * NOTMUCH_STATUS_READ_ONLY_DATABASE (excluded by @Message RW@)
+--
+-- Therefore assume everything worked!
+--
+message_remove_tag :: Message n RW -> Tag -> IO ()
+message_remove_tag msg tag = withMessage msg $ \ptr ->
+  tagUseAsCString tag $ \s ->
+    void $ {#call message_remove_tag #} ptr s
 
 -- According to the header file, possible errors are:
 --
@@ -479,7 +492,6 @@ message_thaw :: (CmpNat n 0 ~ 'GT) => Message n RW -> IO (Message (n - 1) RW)
 message_thaw msg = withMessage msg $ \ptr ->
   coerce msg <$ {#call message_thaw #} ptr
 
--- message_remove_tag
 -- message_maildir_flags_to_tags
 -- message_tags_to_maildir_flags
 
