@@ -241,7 +241,7 @@ withFrozenMessage k msg = bracket (message_freeze msg) message_thaw k
 
 -- | Set tags for the message.  Atomic.
 --
-messageSetTags :: MonadIO m => Foldable t => t Tag -> Message 0 RW -> m ()
+messageSetTags :: (MonadIO m, Foldable t) => t Tag -> Message 0 RW -> m ()
 messageSetTags l = liftIO . withFrozenMessage (\msg ->
   message_remove_all_tags msg *> traverse_ (message_add_tag msg) l)
 
