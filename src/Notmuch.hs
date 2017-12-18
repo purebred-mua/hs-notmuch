@@ -135,9 +135,6 @@ instance HasTags (Database a) where
 instance HasTags (Thread a) where
   tags = liftIO . thread_get_tags
 
-instance HasTags Messages where
-  tags = liftIO . messages_collect_tags
-
 instance HasTags (Message n a) where
   tags = liftIO . message_get_tags
 

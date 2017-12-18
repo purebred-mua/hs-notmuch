@@ -384,13 +384,6 @@ thread_get_tags :: Thread a -> IO [Tag]
 thread_get_tags ptr = withThread ptr $ \ptr' ->
   {#call thread_get_tags #} ptr' >>= tagsToList
 
--- Tags are always copied from the libnotmuch-managed memory,
--- and all the copying takes place under 'withMessages', so
--- we don't need to detach the pointer or use a ForeignPtr.
-messages_collect_tags :: Messages -> IO [Tag]
-messages_collect_tags ptr = withMessages ptr $ \ptr' ->
-  {#call messages_collect_tags #} ptr' >>= tagsToList
-
 message_get_message_id :: Message n a -> IO MessageId
 message_get_message_id ptr =
   withMessage ptr ({#call message_get_message_id #} >=> B.packCString)
