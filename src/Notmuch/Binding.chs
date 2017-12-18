@@ -78,7 +78,7 @@ mkTag s
 {#pointer *thread_t as ThreadHandle foreign newtype #}
 {#pointer *messages_t as Messages foreign newtype #}
 {#pointer *message_t as MessageHandle foreign newtype #}
-{#pointer *tags_t as Tags foreign newtype #}
+{#pointer *tags_t as Tags newtype #}
 {#pointer *directory_t as Directory foreign newtype #}
 {#pointer *filenames_t as Filenames foreign newtype #}
 
@@ -235,13 +235,15 @@ database_find_message_x prep f db s =
         (Just message_destroy) )
   >>= throwOr pure
 
+-- Tags are always copied from the libnotmuch-managed memory,
+-- and all the copying takes place under 'withDatabase', so
+-- we don't need to detach the pointer or use a ForeignPtr.
+--
 -- TODO: check for NULL, indicating error
+--
 database_get_all_tags :: Database a -> IO [Tag]
 database_get_all_tags ptr = withDatabase ptr $ \ptr' ->
-  {#call database_get_all_tags #} ptr'
-    >>= detachPtr
-    >>= newForeignPtr tags_destroy
-    >>= tagsToList . Tags
+  {#call database_get_all_tags #} ptr' >>= tagsToList
 
 -- TODO: check for NULL, indicating error
 query_create :: Database a -> String -> IO (Query a)
@@ -372,19 +374,19 @@ thread_get_subject ptr = withThread ptr ({#call thread_get_subject #} >=> B.pack
 thread_get_newest_date :: Thread a -> IO CLong
 thread_get_newest_date = flip withThread {#call thread_get_newest_date #}
 
+-- Tags are always copied from the libnotmuch-managed memory,
+-- and all the copying takes place under 'withThread', so
+-- we don't need to detach the pointer or use a ForeignPtr.
 thread_get_tags :: Thread a -> IO [Tag]
 thread_get_tags ptr = withThread ptr $ \ptr' ->
-  {#call thread_get_tags #} ptr'
-    >>= detachPtr
-    >>= newForeignPtr tags_destroy
-    >>= tagsToList . Tags
+  {#call thread_get_tags #} ptr' >>= tagsToList
 
+-- Tags are always copied from the libnotmuch-managed memory,
+-- and all the copying takes place under 'withMessages', so
+-- we don't need to detach the pointer or use a ForeignPtr.
 messages_collect_tags :: Messages -> IO [Tag]
 messages_collect_tags ptr = withMessages ptr $ \ptr' ->
-  {#call messages_collect_tags #} ptr'
-    >>= detachPtr
-    >>= newForeignPtr tags_destroy
-    >>= tagsToList . Tags
+  {#call messages_collect_tags #} ptr' >>= tagsToList
 
 message_get_message_id :: Message n a -> IO MessageId
 message_get_message_id ptr =
@@ -437,12 +439,12 @@ message_get_header ptr s =
         then pure Nothing
         else Just <$> B.packCString r
 
+-- Tags are always copied from the libnotmuch-managed memory,
+-- and all the copying takes place under 'withMessage', so
+-- we don't need to detach the pointer or use a ForeignPtr.
 message_get_tags :: Message n a -> IO [Tag]
 message_get_tags ptr = withMessage ptr $ \ptr' ->
-  {#call message_get_tags #} ptr'
-    >>= detachPtr
-    >>= newForeignPtr tags_destroy
-    >>= tagsToList . Tags
+  {#call message_get_tags #} ptr' >>= tagsToList
 
 -- According to the header file, possible errors are:
 --
@@ -563,7 +565,7 @@ ptrToList withFObj test get next f fObj = withFObj fObj ptrToList'
 
 tagsToList :: Tags -> IO [Tag]
 tagsToList = ptrToList
-  withTags
+  (flip ($))
   {#call tags_valid #}
   {#call tags_get #}
   {#call tags_move_to_next #}
