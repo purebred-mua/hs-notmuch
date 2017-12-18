@@ -547,18 +547,13 @@ constructF mkF dcon constructor destructor =
 -- | Turn a C iterator into a list
 --
 ptrToList
-  :: (p -> (Ptr p -> IO [b]) -> IO [b])
-  -- ^ Pointer unwrapper function (e.g. `withMessages`)
-  -> (Ptr p -> IO (CInt))
-  -- ^ Predicate on iterator
-  -> (Ptr p -> IO a)
-  -- ^ Iterater getter function
-  -> (Ptr p -> IO ())
-  -- ^ Function to advance iterator
-  -> (a -> IO b)
-  -- ^ Item mapper
-  -> p
-  -- ^ Pointer
+  :: (obj -> (ptr -> IO [b]) -> IO [b])
+  -- ^ Object unwrapper function (e.g. `withMessages`)
+  -> (ptr -> IO CInt) -- ^ Iterator predicate function
+  -> (ptr -> IO a)    -- ^ Iterator get function
+  -> (ptr -> IO ())   -- ^ Iterator next function
+  -> (a -> IO b)      -- ^ Item mapper
+  -> obj              -- ^ Object
   -> IO [b]
 ptrToList withFObj test get next f fObj = withFObj fObj ptrToList'
   where
