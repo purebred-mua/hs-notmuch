@@ -41,11 +41,12 @@ import Notmuch.Util
 {#context prefix = "notmuch" #}
 
 import Foreign
-  ( FinalizerPtr, ForeignPtr, Ptr
+  ( FinalizerPtr, Ptr
   , alloca, newForeignPtr, newForeignPtr_, nullFunPtr, nullPtr, peek
   , touchForeignPtr
   )
 import Foreign.C
+import Foreign.Storable (Storable)
 import qualified System.IO.Unsafe
 
 import qualified Data.ByteString as B
@@ -158,10 +159,9 @@ database_open s =
   liftIO (
     withCString s (\s' -> (fmap . fmap) runIdentity $
       constructF
-        (pure . Identity)
-        (Database . DatabaseHandle)
+        Identity
+        (fmap (Database . DatabaseHandle) . newForeignPtr_)
         ({#call database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
-        Nothing  -- no destructor
     ))
   >>= throwOr upgrade
 
@@ -224,10 +224,11 @@ database_find_message_x prep f db s =
   liftIO (withDatabase db $ \db' ->
     prep s $ \s' ->
       constructF
-        (\ptr -> if ptr /= nullPtr then Just <$> detachPtr ptr else pure Nothing)
-        (Message . MessageHandle)
+        (\ptr -> if ptr /= nullPtr then Just ptr else Nothing)
+        (fmap (Message . MessageHandle)
+          . (newForeignPtr message_destroy <=< detachPtr))
         (f db' s')
-        (Just message_destroy) )
+  )
   >>= throwOr pure
 
 -- Tags are always copied from the libnotmuch-managed memory,
@@ -273,10 +274,10 @@ query_search_threads q =
 #if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   liftIO ( withQuery q $ \qPtr ->
     constructF
-      (fmap Identity . detachPtr)
-      Threads
+      Identity
+      (fmap Threads . (newForeignPtr threads_destroy <=< detachPtr))
       ({#call query_search_threads #} qPtr)
-      (Just threads_destroy) )
+  )
   >>= throwOr (liftIO . threadsToList . runIdentity)
 #else
   liftIO $ withQuery q $ \qPtr ->
@@ -293,10 +294,10 @@ query_search_messages q =
 #if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   liftIO ( withQuery q $ \qPtr ->
     constructF
-      (fmap Identity . detachPtr)
-      Messages
+      Identity
+      (fmap Messages . (newForeignPtr messages_destroy <=< detachPtr))
       ({#call query_search_messages #} qPtr)
-      (Just messages_destroy) )
+  )
   >>= throwOr (liftIO . messagesToList . runIdentity)
 #else
   liftIO $ withQuery q $ \qPtr ->
@@ -530,21 +531,18 @@ enumToCInt :: Enum a => a -> CInt
 enumToCInt = fromIntegral . fromEnum
 
 constructF
-  :: Traversable t
-  => (Ptr p -> IO (t (Ptr p)))
+  :: (Storable ptr, Traversable t)
+  => (ptr -> t ptr)
   -- ^ Inspect received pointer and lift it into a Traversable
-  -> (ForeignPtr p -> r)
-  -- ^ Haskell data constructor
-  -> (Ptr (Ptr p) -> IO CInt)
+  -> (ptr -> IO r)
+  -- ^ Wrap pointer, including attaching finalizers
+  -> (Ptr ptr -> IO CInt)
   -- ^ C double-pointer-style constructor
-  -> Maybe (FinalizerPtr p)
-  -- ^ Optional destructor
   -> IO (Either Status (t r))
-constructF mkF dcon constructor destructor =
-  let mkForeignPtr = maybe newForeignPtr_ newForeignPtr destructor
-  in alloca $ \ptr ->
+constructF mkF dcon constructor =
+  alloca $ \ptr ->
     toEnum . fromIntegral <$> constructor ptr
-    >>= status (peek ptr >>= mkF >>= traverse (fmap dcon . mkForeignPtr))
+    >>= status (traverse dcon . mkF =<< peek ptr)
 
 
 type PtrToList
