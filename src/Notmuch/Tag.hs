@@ -51,6 +51,7 @@ mkTag s =
 -- | /O(1)/
 tagUseAsCString :: Tag -> (CString -> IO a) -> IO a
 tagUseAsCString (Tag bs) = B.unsafeUseAsCString bs
+{-# INLINE tagUseAsCString #-}
 
 -- | /O(n)/ @CString@ must be null-terminated and non-empty.
 -- We must copy the tag into pinned memory so that it can be
