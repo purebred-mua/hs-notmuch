@@ -23,28 +23,40 @@ module Notmuch.Tag
   ) where
 
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Internal as B
+import qualified Data.ByteString.Unsafe as B
 import Foreign.C (CString)
 
 import Notmuch.Binding.Constants (tagMaxLen)
 
-newtype Tag = Tag { getTag :: B.ByteString }
+newtype Tag = Tag B.ByteString
   deriving (Eq, Ord)
 
 instance Show Tag where
-  show (Tag s) = show s
+  show = show . getTag
 
--- | @Just@ a tag, or @Nothing@ if the string is too long
+-- | /O(1)/
+getTag :: Tag -> B.ByteString
+getTag (Tag s) = B.init s  -- trim null byte
+
+-- | /O(n) @Just@ a tag, or @Nothing@ if the string is too long
 mkTag :: B.ByteString -> Maybe Tag
 mkTag s =
-  let
+  if w < 1 || w > tagMaxLen
+    then Nothing
+    else Just $ Tag (s `B.snoc` 0)
+  where
     w = B.length s
-  in
-    if w < 1 || w > tagMaxLen
-      then Nothing
-      else Just (Tag s)
 
+-- | /O(1)/
 tagUseAsCString :: Tag -> (CString -> IO a) -> IO a
-tagUseAsCString = B.useAsCString . getTag
+tagUseAsCString (Tag bs) = B.unsafeUseAsCString bs
 
+-- | /O(n)/ @CString@ must be null-terminated and non-empty.
+-- We must copy the tag into pinned memory so that it can be
+-- used again as a CString without copying.
+--
 tagFromCString :: CString -> IO Tag
-tagFromCString = fmap Tag . B.packCString
+tagFromCString cstr = Tag <$> do
+  len <- B.c_strlen cstr
+  B.packCStringLen (cstr, fromIntegral len + 1 {- include null byte -})
