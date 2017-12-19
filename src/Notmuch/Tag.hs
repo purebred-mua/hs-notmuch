@@ -28,6 +28,10 @@ import Foreign.C (CString)
 import Notmuch.Binding.Constants (tagMaxLen)
 
 newtype Tag = Tag { getTag :: B.ByteString }
+  deriving (Eq, Ord)
+
+instance Show Tag where
+  show (Tag s) = show s
 
 -- | @Just@ a tag, or @Nothing@ if the string is too long
 mkTag :: B.ByteString -> Maybe Tag
