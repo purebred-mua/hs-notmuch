@@ -18,6 +18,7 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -28,6 +29,7 @@ import Control.Monad ((>=>), (<=<), void)
 import Control.Monad.Except (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Coerce (coerce)
+import Data.Functor (($>))
 import Data.Functor.Identity (Identity(..))
 import Data.Proxy
 import GHC.TypeLits
@@ -40,6 +42,7 @@ import Notmuch.Util
 import Foreign
   ( FinalizerPtr, ForeignPtr, Ptr
   , alloca, newForeignPtr, newForeignPtr_, nullFunPtr, nullPtr, peek
+  , touchForeignPtr
   )
 import Foreign.C
 import qualified System.IO.Unsafe
@@ -546,42 +549,67 @@ constructF mkF dcon constructor destructor =
     toEnum . fromIntegral <$> constructor ptr
     >>= status (peek ptr >>= mkF >>= traverse (fmap dcon . mkForeignPtr))
 
--- | Turn a C iterator into a list
---
-ptrToList
-  :: (obj -> (ptr -> IO [b]) -> IO [b])
+
+type PtrToList
+  = forall a b ptr obj.
+     (obj -> (ptr -> IO [b]) -> IO [b])
   -- ^ Object unwrapper function (e.g. `withMessages`)
+  -> (obj -> IO ())   -- ^ touchForeignPtr or similar
   -> (ptr -> IO CInt) -- ^ Iterator predicate function
   -> (ptr -> IO a)    -- ^ Iterator get function
   -> (ptr -> IO ())   -- ^ Iterator next function
   -> (a -> IO b)      -- ^ Item mapper
   -> obj              -- ^ Object
   -> IO [b]
-ptrToList withFObj test get next f fObj = withFObj fObj ptrToList'
-  where
-  ptrToList' ptr = test ptr >>= \valid -> case valid of
-    0 -> pure []
-    _ -> (:) <$> (get ptr >>= f >>= \x -> next ptr >> pure x) <*> ptrToList' ptr
 
+-- | Strictly read a C iterator into a list.  The iterator being
+-- read need not be detached from its parent, so long as the parent
+-- is kept live during the execution of @ptrToList@.
+--
+ptrToList :: PtrToList
+ptrToList = ptrToListIO id
+
+-- | Lazily read a C iterator into a list.  The iterator pointer
+-- must be kept alive until the iterator is exhausted.  Practically
+-- this means detaching the iterator from its parent and passing it
+-- to @lazyPtrToList@ as a 'ForeignPtr' (with attached destructor).
+--
+lazyPtrToList :: PtrToList
+lazyPtrToList = ptrToListIO System.IO.Unsafe.unsafeInterleaveIO
+
+ptrToListIO :: (forall r. IO r -> IO r) -> PtrToList
+ptrToListIO tweakIO withFObj touch test get next f fObj = withFObj fObj go
+  where
+  go ptr = test ptr >>= \valid -> case valid of
+    0 -> touch fObj $> []
+    _ -> (:)
+          <$> (get ptr >>= f >>= \x -> next ptr $> x)
+          <*> tweakIO (go ptr)
+
+-- It's assumed that tag lists are short and that it doesn't make
+-- sense to read the list lazily.  Tere
 tagsToList :: Tags -> IO [Tag]
 tagsToList = ptrToList
   (flip ($))
+  (const $ pure ())
   {#call tags_valid #}
   {#call tags_get #}
   {#call tags_move_to_next #}
   (fmap Tag . B.packCString)
 
 threadsToList :: Threads -> IO [Thread a]
-threadsToList = ptrToList
+threadsToList = lazyPtrToList
   withThreads
+  (\(Threads fp) -> touchForeignPtr fp)
   {#call threads_valid #}
   {#call threads_get #}
   {#call threads_move_to_next #}
   (fmap (Thread . ThreadHandle) . newForeignPtr thread_destroy <=< detachPtr)
 
 messagesToList :: Messages -> IO [Message 0 a]
-messagesToList = ptrToList
+messagesToList = lazyPtrToList
   withMessages
+  (\(Messages fp) -> touchForeignPtr fp)
   {#call messages_valid #}
   {#call messages_get #}
   {#call messages_move_to_next #}
