@@ -16,10 +16,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -29,6 +31,7 @@ import Control.Monad ((>=>), (<=<), void)
 import Control.Monad.Except (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Coerce (coerce)
+import Data.Foldable (traverse_)
 import Data.Functor (($>))
 import Data.Functor.Identity (Identity(..))
 import Data.Proxy
@@ -41,7 +44,7 @@ import Notmuch.Util
 {#context prefix = "notmuch" #}
 
 import Foreign
-  ( FinalizerPtr, Ptr
+  ( FinalizerPtr, ForeignPtr, Ptr, castForeignPtr
   , alloca, newForeignPtr, newForeignPtr_, nullFunPtr, nullPtr, peek
   , touchForeignPtr
   )
@@ -70,13 +73,16 @@ type ThreadId = B.ByteString
 {#enum message_flag_t as MessageFlag {underscoreToCase} #}
 {#pointer *database_t as DatabaseHandle foreign newtype #}
 {#pointer *query_t as QueryHandle foreign newtype #}
-{#pointer *threads_t as Threads foreign newtype #}
+{#pointer *threads_t as Threads newtype #}
 {#pointer *thread_t as ThreadHandle foreign newtype #}
-{#pointer *messages_t as Messages foreign newtype #}
+{#pointer *messages_t as Messages newtype #}
 {#pointer *message_t as MessageHandle foreign newtype #}
 {#pointer *tags_t as Tags newtype #}
 {#pointer *directory_t as Directory foreign newtype #}
 {#pointer *filenames_t as Filenames foreign newtype #}
+
+deriving instance Storable Threads
+deriving instance Storable Messages
 
 instance Show Status where
   show a = System.IO.Unsafe.unsafePerformIO $
@@ -102,15 +108,25 @@ newtype Database (a :: DatabaseMode) = Database DatabaseHandle
 withDatabase :: Database a -> (Ptr DatabaseHandle -> IO b) -> IO b
 withDatabase (Database dbh) = withDatabaseHandle dbh
 
-newtype Message (n :: Nat) (a :: DatabaseMode) = Message MessageHandle
+data Message (n :: Nat) (a :: DatabaseMode) = Message
+                 ![ForeignPtr () {- owners -}]
+  {-# UNPACK #-} !MessageHandle
 
 withMessage :: Message n a -> (Ptr MessageHandle -> IO b) -> IO b
-withMessage (Message a) = withMessageHandle a
+withMessage (Message owners a) k = do
+  r <- withMessageHandle a k
+  traverse_ touchForeignPtr owners
+  pure r
 
-newtype Thread (a :: DatabaseMode) = Thread ThreadHandle
+data Thread (a :: DatabaseMode) = Thread
+  {-# UNPACK #-} !(ForeignPtr QueryHandle {- owner -})
+  {-# UNPACK #-} !ThreadHandle
 
 withThread :: Thread a -> (Ptr ThreadHandle -> IO b) -> IO b
-withThread (Thread a) = withThreadHandle a
+withThread (Thread fp a) k = do
+  r <- withThreadHandle a k
+  touchForeignPtr fp
+  pure r
 
 newtype Query (a :: DatabaseMode) = Query QueryHandle
 
@@ -220,12 +236,12 @@ database_find_message_x
   -> Database a -- ^ Database
   -> s
   -> m (Maybe (Message 0 a))
-database_find_message_x prep f db s =
+database_find_message_x prep f db@(Database (DatabaseHandle dfp)) s =
   liftIO (withDatabase db $ \db' ->
     prep s $ \s' ->
       constructF
         (\ptr -> if ptr /= nullPtr then Just ptr else Nothing)
-        (fmap (Message . MessageHandle)
+        (fmap (Message [castForeignPtr dfp] . MessageHandle)
           . (newForeignPtr message_destroy <=< detachPtr))
         (f db' s')
   )
@@ -270,41 +286,35 @@ query_add_tag_exclude ptr tag = void $
 query_search_threads
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Query a -> m [Thread a]
-query_search_threads q =
+query_search_threads q@(Query (QueryHandle qfp)) =
 #if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   liftIO ( withQuery q $ \qPtr ->
     constructF
       Identity
-      (fmap Threads . (newForeignPtr threads_destroy <=< detachPtr))
+      (threadsToList qfp)
       ({#call query_search_threads #} qPtr)
   )
-  >>= throwOr (liftIO . threadsToList . runIdentity)
+  >>= throwOr (pure . runIdentity)
 #else
   liftIO $ withQuery q $ \qPtr ->
-    {#call query_search_threads #} qPtr
-      >>= detachPtr
-      >>= newForeignPtr threads_destroy
-      >>= threadsToList . Threads
+    {#call query_search_threads #} qPtr >>= threadsToList qfp
 #endif
 
 query_search_messages
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Query a -> m [Message 0 a]
-query_search_messages q =
+query_search_messages q@(Query (QueryHandle qfp)) =
 #if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   liftIO ( withQuery q $ \qPtr ->
     constructF
       Identity
-      (fmap Messages . (newForeignPtr messages_destroy <=< detachPtr))
+      (messagesToList [castForeignPtr qfp])
       ({#call query_search_messages #} qPtr)
   )
-  >>= throwOr (liftIO . messagesToList . runIdentity)
+  >>= throwOr (pure . runIdentity)
 #else
   liftIO $ withQuery q $ \qPtr ->
-    {#call query_search_messages #} qPtr
-      >>= detachPtr
-      >>= newForeignPtr messages_destroy
-      >>= messagesToList . Messages
+    {#call query_search_messages #} qPtr >>= messagesToList [castForeignPtr qfp]
 #endif
 
 query_count_x
@@ -342,18 +352,16 @@ thread_get_total_messages ptr =
   fromIntegral <$> withThread ptr ({#call thread_get_total_messages #})
 
 thread_get_toplevel_messages :: MonadIO m => Thread a -> m [Message 0 a]
-thread_get_toplevel_messages ptr = liftIO $ withThread ptr $ \ptr' ->
-  {#call thread_get_toplevel_messages #} ptr'
-    >>= detachPtr
-    >>= newForeignPtr messages_destroy
-    >>= messagesToList . Messages
+thread_get_toplevel_messages t@(Thread _ (ThreadHandle tfp))
+  = liftIO $ withThread t $ \ptr ->
+    {#call thread_get_toplevel_messages #} ptr
+      >>= messagesToList [castForeignPtr tfp]
 
 thread_get_messages :: MonadIO m => Thread a -> m [Message 0 a]
-thread_get_messages ptr = liftIO $ withThread ptr $ \ptr' ->
-  {#call thread_get_messages #} ptr'
-    >>= detachPtr
-    >>= newForeignPtr messages_destroy
-    >>= messagesToList . Messages
+thread_get_messages t@(Thread _ (ThreadHandle tfp))
+  = liftIO $ withThread t $ \ptr ->
+    {#call thread_get_messages #} ptr
+      >>= messagesToList [castForeignPtr tfp]
 
 -- notmuch_thread_get_matched_messages -> Int
 
@@ -386,11 +394,11 @@ message_get_thread_id ptr =
   withMessage ptr ({#call message_get_thread_id #} >=> B.packCString)
 
 message_get_replies :: MonadIO m => Message n a -> m [Message 0 a]
-message_get_replies ptr = liftIO $ withMessage ptr $ \ptr' ->
-  {#call message_get_replies #} ptr'
-    >>= detachPtr
-    >>= newForeignPtr messages_destroy
-    >>= messagesToList . Messages
+message_get_replies msg@(Message owners (MessageHandle mfp))
+  = liftIO $ withMessage msg $ \ptr ->
+    {#call message_get_replies #} ptr
+      >>= messagesToList (castForeignPtr mfp : owners)
+          -- have to keep this message alive, as well as its owners
 
 message_get_filename :: Message n a -> IO FilePath
 message_get_filename ptr =
@@ -507,20 +515,11 @@ message_thaw msg = withMessage msg $ \ptr ->
 foreign import ccall "&notmuch_query_destroy"
   query_destroy :: FinalizerPtr a
 
-foreign import ccall "&notmuch_threads_destroy"
-  threads_destroy :: FinalizerPtr a
-
 foreign import ccall "&notmuch_thread_destroy"
   thread_destroy :: FinalizerPtr a
 
-foreign import ccall "&notmuch_messages_destroy"
-  messages_destroy :: FinalizerPtr a
-
 foreign import ccall "&notmuch_message_destroy"
   message_destroy :: FinalizerPtr a
-
-foreign import ccall "&notmuch_tags_destroy"
-  tags_destroy :: FinalizerPtr a
 
 
 --
@@ -545,38 +544,36 @@ constructF mkF dcon constructor =
     >>= status (traverse dcon . mkF =<< peek ptr)
 
 
-type PtrToList
-  = forall a b ptr obj.
-     (obj -> (ptr -> IO [b]) -> IO [b])
-  -- ^ Object unwrapper function (e.g. `withMessages`)
-  -> (obj -> IO ())   -- ^ touchForeignPtr or similar
-  -> (ptr -> IO CInt) -- ^ Iterator predicate function
+type PtrToList =
+  forall a b ptr.
+     (ptr -> IO CInt) -- ^ Iterator predicate function
   -> (ptr -> IO a)    -- ^ Iterator get function
   -> (ptr -> IO ())   -- ^ Iterator next function
   -> (a -> IO b)      -- ^ Item mapper
-  -> obj              -- ^ Object
+  -> ptr              -- ^ Iterator
   -> IO [b]
 
--- | Strictly read a C iterator into a list.  The iterator being
--- read need not be detached from its parent, so long as the parent
--- is kept live during the execution of @ptrToList@.
+-- | Strictly read a C iterator into a list.
+--
+-- The touch effect is used to keep relevant objects alive for the
+-- duration of the iteration.
 --
 ptrToList :: PtrToList
 ptrToList = ptrToListIO id
 
--- | Lazily read a C iterator into a list.  The iterator pointer
--- must be kept alive until the iterator is exhausted.  Practically
--- this means detaching the iterator from its parent and passing it
--- to @lazyPtrToList@ as a 'ForeignPtr' (with attached destructor).
+-- | Lazily read a C iterator into a list.
+--
+-- The touch effect is used to keep relevant objects alive for the
+-- duration of the iteration.
 --
 lazyPtrToList :: PtrToList
 lazyPtrToList = ptrToListIO System.IO.Unsafe.unsafeInterleaveIO
 
 ptrToListIO :: (forall r. IO r -> IO r) -> PtrToList
-ptrToListIO tweakIO withFObj touch test get next f fObj = withFObj fObj go
+ptrToListIO tweakIO test get next f = go
   where
   go ptr = test ptr >>= \valid -> case valid of
-    0 -> touch fObj $> []
+    0 -> pure []
     _ -> (:)
           <$> (get ptr >>= f >>= \x -> next ptr $> x)
           <*> tweakIO (go ptr)
@@ -585,27 +582,21 @@ ptrToListIO tweakIO withFObj touch test get next f fObj = withFObj fObj go
 -- sense to read the list lazily.  Tere
 tagsToList :: Tags -> IO [Tag]
 tagsToList = ptrToList
-  (flip ($))
-  (const $ pure ())
   {#call tags_valid #}
   {#call tags_get #}
   {#call tags_move_to_next #}
   tagFromCString
 
-threadsToList :: Threads -> IO [Thread a]
-threadsToList = lazyPtrToList
-  withThreads
-  (\(Threads fp) -> touchForeignPtr fp)
+threadsToList :: ForeignPtr QueryHandle -> Threads -> IO [Thread mode]
+threadsToList owner = lazyPtrToList
   {#call threads_valid #}
   {#call threads_get #}
   {#call threads_move_to_next #}
-  (fmap (Thread . ThreadHandle) . newForeignPtr thread_destroy <=< detachPtr)
+  (fmap (Thread owner . ThreadHandle) . newForeignPtr thread_destroy <=< detachPtr)
 
-messagesToList :: Messages -> IO [Message 0 a]
-messagesToList = lazyPtrToList
-  withMessages
-  (\(Messages fp) -> touchForeignPtr fp)
+messagesToList :: [ForeignPtr ()] -> Messages -> IO [Message 0 mode]
+messagesToList owners = lazyPtrToList
   {#call messages_valid #}
   {#call messages_get #}
   {#call messages_move_to_next #}
-  (fmap (Message . MessageHandle) . newForeignPtr message_destroy <=< detachPtr)
+  (fmap (Message owners . MessageHandle) . newForeignPtr message_destroy <=< detachPtr)
