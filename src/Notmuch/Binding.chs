@@ -419,14 +419,6 @@ message_get_date = flip withMessage {#call unsafe message_get_date #}
 -- returns EMPTY STRING on missing header,
 -- NOTHING on error (I know, confusing)
 --
--- possible optimisation: detachPtr the returned string and
--- B.unsafePackCStringFinalizer to turn it into a ByteString
--- with talloc_free finaliser.  This will be O(n) because
--- must use strlen(3) to learn string length, and avoids
--- malloc.  Measure carefully to see if this would be worth it,
--- because it couples to both notmuch internals and unstable
--- parts of bytestring API (Data.ByteString.Unsafe).
---
 message_get_header :: Message n a -> B.ByteString -> IO (Maybe B.ByteString)
 message_get_header ptr s =
   B.useAsCString s $ \s' ->
