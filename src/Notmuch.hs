@@ -104,6 +104,9 @@ module Notmuch
   -- * Errors
   , Status(..)
   , AsNotmuchError(..)
+
+  -- * Library information
+  , libnotmuchVersion
   ) where
 
 import Control.Exception (bracket)
@@ -119,6 +122,7 @@ import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 
 import Notmuch.Tag
 import Notmuch.Binding
+import Notmuch.Binding.Constants (libnotmuchVersion)
 import Notmuch.Search
 import Notmuch.Util
 

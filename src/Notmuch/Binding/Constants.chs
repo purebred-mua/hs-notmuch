@@ -15,10 +15,21 @@
 
 module Notmuch.Binding.Constants
   (
-    tagMaxLen
+    libnotmuchVersion
+  , tagMaxLen
   ) where
+
+import Data.Version (Version, makeVersion)
 
 #include <notmuch.h>
 
 tagMaxLen :: Int
 tagMaxLen = {#const NOTMUCH_TAG_MAX #}
+
+-- | The version of /libnotmuch/ that /hs-notmuch/ was built against.
+libnotmuchVersion :: Version
+libnotmuchVersion = makeVersion
+  [ {#const LIBNOTMUCH_MAJOR_VERSION #}
+  , {#const LIBNOTMUCH_MINOR_VERSION #}
+  , {#const LIBNOTMUCH_MICRO_VERSION #}
+  ]
