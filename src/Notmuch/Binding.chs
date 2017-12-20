@@ -86,7 +86,7 @@ deriving instance Storable Messages
 
 instance Show Status where
   show a = System.IO.Unsafe.unsafePerformIO $
-    {#call status_to_string #} (fromEnum' a) >>= peekCString
+    {#call unsafe status_to_string #} (fromEnum' a) >>= peekCString
 
 class AsNotmuchError s where
   _NotmuchError :: Prism' s Status
@@ -158,7 +158,7 @@ instance Mode 'DatabaseModeReadWrite where
   getMode _ = DatabaseModeReadWrite
   upgrade db =
     liftIO (toEnum . fromIntegral <$> withDatabase db (\dbPtr ->
-      {#call database_upgrade #} dbPtr nullFunPtr nullPtr))
+      {#call unsafe database_upgrade #} dbPtr nullFunPtr nullPtr))
     >>= \rv -> case rv of
       StatusSuccess -> pure db
       e -> throwError $ review _NotmuchError e
@@ -177,7 +177,7 @@ database_open s =
       constructF
         Identity
         (fmap (Database . DatabaseHandle) . newForeignPtr_)
-        ({#call database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
+        ({#call unsafe database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
     ))
   >>= throwOr upgrade
 
@@ -185,22 +185,22 @@ database_destroy :: (AsNotmuchError e, MonadError e m, MonadIO m) => Database a 
 database_destroy db =
 #if LIBNOTMUCH_CHECK_VERSION(4,1,0)
   liftIO (
-    toStatus <$> withDatabase db {#call database_destroy #}
+    toStatus <$> withDatabase db {#call unsafe database_destroy #}
     >>= status (pure ())
   ) >>= throwOr pure
 #else
-  liftIO (withDatabase db {#call database_destroy #})
+  liftIO (withDatabase db {#call unsafe database_destroy #})
 #endif
 
 -- notmuch_status_t notmuch_database_compact(path, backup_path, status_cb, closure)
 
 database_get_path :: Database a -> IO FilePath
 database_get_path db =
-  withDatabase db {#call database_get_path #} >>= peekCString
+  withDatabase db {#call unsafe database_get_path #} >>= peekCString
 
 database_get_version :: Database a -> IO Int
 database_get_version db =
-  fromIntegral <$> withDatabase db {#call database_get_version #}
+  fromIntegral <$> withDatabase db {#call unsafe database_get_version #}
 
 -- notmuch_database_needs_upgrade ## do automatically for updates
 -- notmuch_database_upgrade ## do automatically for updates
@@ -219,7 +219,7 @@ database_find_message
   -> MessageId
   -> m (Maybe (Message 0 a))
 database_find_message =
-  database_find_message_x B.useAsCString {#call database_find_message #}
+  database_find_message_x B.useAsCString {#call unsafe database_find_message #}
 
 database_find_message_by_filename
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
@@ -227,7 +227,7 @@ database_find_message_by_filename
   -> FilePath   -- ^ Filename
   -> m (Maybe (Message 0 a))
 database_find_message_by_filename =
-  database_find_message_x withCString {#call database_find_message_by_filename #}
+  database_find_message_x withCString {#call unsafe database_find_message_by_filename #}
 
 database_find_message_x
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
@@ -255,33 +255,33 @@ database_find_message_x prep f db@(Database (DatabaseHandle dfp)) s =
 --
 database_get_all_tags :: Database a -> IO [Tag]
 database_get_all_tags ptr = withDatabase ptr $ \ptr' ->
-  {#call database_get_all_tags #} ptr' >>= tagsToList
+  {#call unsafe database_get_all_tags #} ptr' >>= tagsToList
 
 -- TODO: check for NULL, indicating error
 query_create :: Database a -> String -> IO (Query a)
 query_create db s = withCString s $ \s' ->
   withDatabase db $ \db' ->
-    {#call notmuch_query_create #} db' s'
+    {#call unsafe notmuch_query_create #} db' s'
       >>= detachPtr
       >>= fmap (Query . QueryHandle) . newForeignPtr query_destroy
 
 query_get_query_string :: Query a -> IO String
 query_get_query_string ptr =
-  withQuery ptr ({#call query_get_query_string #} >=> peekCString)
+  withQuery ptr ({#call unsafe query_get_query_string #} >=> peekCString)
 
 query_set_sort :: Query a -> Sort -> IO ()
 query_set_sort ptr x = withQuery ptr $ \ptr' ->
-  {#call query_set_sort #} ptr' (fromEnum' x)
+  {#call unsafe query_set_sort #} ptr' (fromEnum' x)
 
 query_get_sort :: Query a -> IO Sort
 query_get_sort ptr = withQuery ptr $
-  fmap (toEnum . fromIntegral) . {#call query_get_sort #}
+  fmap (toEnum . fromIntegral) . {#call unsafe query_get_sort #}
 
 query_add_tag_exclude :: Query a -> Tag -> IO ()
 query_add_tag_exclude ptr tag = void $
   withQuery ptr $ \ptr' ->
     tagUseAsCString tag $ \s' ->
-      {#call query_add_tag_exclude #} ptr' s'
+      {#call unsafe query_add_tag_exclude #} ptr' s'
 
 query_search_threads
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
@@ -292,12 +292,12 @@ query_search_threads q@(Query (QueryHandle qfp)) =
     constructF
       Identity
       (threadsToList qfp)
-      ({#call query_search_threads #} qPtr)
+      ({#call unsafe query_search_threads #} qPtr)
   )
   >>= throwOr (pure . runIdentity)
 #else
   liftIO $ withQuery q $ \qPtr ->
-    {#call query_search_threads #} qPtr >>= threadsToList qfp
+    {#call unsafe query_search_threads #} qPtr >>= threadsToList qfp
 #endif
 
 query_search_messages
@@ -309,12 +309,12 @@ query_search_messages q@(Query (QueryHandle qfp)) =
     constructF
       Identity
       (messagesToList [castForeignPtr qfp])
-      ({#call query_search_messages #} qPtr)
+      ({#call unsafe query_search_messages #} qPtr)
   )
   >>= throwOr (pure . runIdentity)
 #else
   liftIO $ withQuery q $ \qPtr ->
-    {#call query_search_messages #} qPtr >>= messagesToList [castForeignPtr qfp]
+    {#call unsafe query_search_messages #} qPtr >>= messagesToList [castForeignPtr qfp]
 #endif
 
 query_count_x
@@ -339,82 +339,82 @@ query_count_x f q = fmap fromIntegral $
 
 query_count_messages, query_count_threads
   :: (AsNotmuchError e, MonadError e m, MonadIO m) => Query a -> m Int
-query_count_messages = query_count_x {#call query_count_messages #}
-query_count_threads = query_count_x {#call query_count_threads #}
+query_count_messages = query_count_x {#call unsafe query_count_messages #}
+query_count_threads = query_count_x {#call unsafe query_count_threads #}
 
 
 thread_get_thread_id :: Thread a -> IO ThreadId
 thread_get_thread_id ptr =
-  withThread ptr ({#call thread_get_thread_id #} >=> B.packCString)
+  withThread ptr ({#call unsafe thread_get_thread_id #} >=> B.packCString)
 
 thread_get_total_messages :: Thread a -> IO Int
 thread_get_total_messages ptr =
-  fromIntegral <$> withThread ptr ({#call thread_get_total_messages #})
+  fromIntegral <$> withThread ptr ({#call unsafe thread_get_total_messages #})
 
 thread_get_toplevel_messages :: MonadIO m => Thread a -> m [Message 0 a]
 thread_get_toplevel_messages t@(Thread _ (ThreadHandle tfp))
   = liftIO $ withThread t $ \ptr ->
-    {#call thread_get_toplevel_messages #} ptr
+    {#call unsafe thread_get_toplevel_messages #} ptr
       >>= messagesToList [castForeignPtr tfp]
 
 thread_get_messages :: MonadIO m => Thread a -> m [Message 0 a]
 thread_get_messages t@(Thread _ (ThreadHandle tfp))
   = liftIO $ withThread t $ \ptr ->
-    {#call thread_get_messages #} ptr
+    {#call unsafe thread_get_messages #} ptr
       >>= messagesToList [castForeignPtr tfp]
 
 -- notmuch_thread_get_matched_messages -> Int
 
 thread_get_authors :: Thread a -> IO (Maybe B.ByteString)
 thread_get_authors ptr = withThread ptr $ \ptr' -> do
-  r <- {#call thread_get_authors #} ptr'
+  r <- {#call unsafe thread_get_authors #} ptr'
   if r == nullPtr
      then pure Nothing
      else Just <$> B.packCString r
 
 thread_get_subject :: Thread a -> IO B.ByteString
-thread_get_subject ptr = withThread ptr ({#call thread_get_subject #} >=> B.packCString)
+thread_get_subject ptr = withThread ptr ({#call unsafe thread_get_subject #} >=> B.packCString)
 -- notmuch_thread_get_oldest_date
 thread_get_newest_date :: Thread a -> IO CLong
-thread_get_newest_date = flip withThread {#call thread_get_newest_date #}
+thread_get_newest_date = flip withThread {#call unsafe thread_get_newest_date #}
 
 -- Tags are always copied from the libnotmuch-managed memory,
 -- and all the copying takes place under 'withThread', so
 -- we don't need to detach the pointer or use a ForeignPtr.
 thread_get_tags :: Thread a -> IO [Tag]
 thread_get_tags ptr = withThread ptr $ \ptr' ->
-  {#call thread_get_tags #} ptr' >>= tagsToList
+  {#call unsafe thread_get_tags #} ptr' >>= tagsToList
 
 message_get_message_id :: Message n a -> IO MessageId
 message_get_message_id ptr =
-  withMessage ptr ({#call message_get_message_id #} >=> B.packCString)
+  withMessage ptr ({#call unsafe message_get_message_id #} >=> B.packCString)
 
 message_get_thread_id :: Message n a -> IO ThreadId
 message_get_thread_id ptr =
-  withMessage ptr ({#call message_get_thread_id #} >=> B.packCString)
+  withMessage ptr ({#call unsafe message_get_thread_id #} >=> B.packCString)
 
 message_get_replies :: MonadIO m => Message n a -> m [Message 0 a]
 message_get_replies msg@(Message owners (MessageHandle mfp))
   = liftIO $ withMessage msg $ \ptr ->
-    {#call message_get_replies #} ptr
+    {#call unsafe message_get_replies #} ptr
       >>= messagesToList (castForeignPtr mfp : owners)
           -- have to keep this message alive, as well as its owners
 
 message_get_filename :: Message n a -> IO FilePath
 message_get_filename ptr =
-  withMessage ptr ({#call message_get_filename #} >=> peekCString)
+  withMessage ptr ({#call unsafe message_get_filename #} >=> peekCString)
 
 message_get_flag :: Message n a -> MessageFlag -> IO Bool
 message_get_flag ptr flag = withMessage ptr $ \ptr' -> do
-  (/= 0) <$> {#call message_get_flag #} ptr' (enumToCInt flag)
+  (/= 0) <$> {#call unsafe message_get_flag #} ptr' (enumToCInt flag)
 
 -- DB NEEDS TO BE WRITABLE???
 message_set_flag :: Message n a -> MessageFlag -> Bool -> IO ()
 message_set_flag ptr flag v = withMessage ptr $ \ptr' ->
-  {#call message_set_flag #} ptr' (enumToCInt flag) (enumToCInt v)
+  {#call unsafe message_set_flag #} ptr' (enumToCInt flag) (enumToCInt v)
 
 message_get_date :: Message n a -> IO CLong
-message_get_date = flip withMessage {#call message_get_date #}
+message_get_date = flip withMessage {#call unsafe message_get_date #}
 
 -- returns EMPTY STRING on missing header,
 -- NOTHING on error (I know, confusing)
@@ -431,7 +431,7 @@ message_get_header :: Message n a -> B.ByteString -> IO (Maybe B.ByteString)
 message_get_header ptr s =
   B.useAsCString s $ \s' ->
     withMessage ptr $ \ptr' -> do
-      r <- {#call message_get_header #} ptr' s'
+      r <- {#call unsafe message_get_header #} ptr' s'
       if r == nullPtr
         then pure Nothing
         else Just <$> B.packCString r
@@ -441,7 +441,7 @@ message_get_header ptr s =
 -- we don't need to detach the pointer or use a ForeignPtr.
 message_get_tags :: Message n a -> IO [Tag]
 message_get_tags ptr = withMessage ptr $ \ptr' ->
-  {#call message_get_tags #} ptr' >>= tagsToList
+  {#call unsafe message_get_tags #} ptr' >>= tagsToList
 
 -- According to the header file, possible errors are:
 --
@@ -451,7 +451,7 @@ message_get_tags ptr = withMessage ptr $ \ptr' ->
 --
 message_remove_all_tags :: Message n RW -> IO ()
 message_remove_all_tags msg = withMessage msg $ \ptr ->
-  void $ {#call message_remove_all_tags #} ptr
+  void $ {#call unsafe message_remove_all_tags #} ptr
 
 -- According to the header file, possible errors are:
 --
@@ -464,7 +464,7 @@ message_remove_all_tags msg = withMessage msg $ \ptr ->
 message_add_tag :: Message n RW -> Tag -> IO ()
 message_add_tag msg tag = withMessage msg $ \ptr ->
   tagUseAsCString tag $ \s ->
-    void $ {#call message_add_tag #} ptr s
+    void $ {#call unsafe message_add_tag #} ptr s
 
 -- According to the header file, possible errors are:
 --
@@ -477,7 +477,7 @@ message_add_tag msg tag = withMessage msg $ \ptr ->
 message_remove_tag :: Message n RW -> Tag -> IO ()
 message_remove_tag msg tag = withMessage msg $ \ptr ->
   tagUseAsCString tag $ \s ->
-    void $ {#call message_remove_tag #} ptr s
+    void $ {#call unsafe message_remove_tag #} ptr s
 
 -- According to the header file, possible errors are:
 --
@@ -487,7 +487,7 @@ message_remove_tag msg tag = withMessage msg $ \ptr ->
 --
 message_freeze :: Message n RW -> IO (Message (n + 1) RW)
 message_freeze msg = withMessage msg $ \ptr ->
-  coerce msg <$ {#call message_freeze #} ptr
+  coerce msg <$ {#call unsafe message_freeze #} ptr
 
 -- According to the header file, possible errors are:
 --
@@ -499,7 +499,7 @@ message_freeze msg = withMessage msg $ \ptr ->
 --
 message_thaw :: (CmpNat n 0 ~ 'GT) => Message n RW -> IO (Message (n - 1) RW)
 message_thaw msg = withMessage msg $ \ptr ->
-  coerce msg <$ {#call message_thaw #} ptr
+  coerce msg <$ {#call unsafe message_thaw #} ptr
 
 -- message_maildir_flags_to_tags
 -- message_tags_to_maildir_flags
@@ -512,13 +512,13 @@ message_thaw msg = withMessage msg $ \ptr ->
 -- Destructors
 --
 
-foreign import ccall "&notmuch_query_destroy"
+foreign import ccall unsafe "&notmuch_query_destroy"
   query_destroy :: FinalizerPtr a
 
-foreign import ccall "&notmuch_thread_destroy"
+foreign import ccall unsafe "&notmuch_thread_destroy"
   thread_destroy :: FinalizerPtr a
 
-foreign import ccall "&notmuch_message_destroy"
+foreign import ccall unsafe "&notmuch_message_destroy"
   message_destroy :: FinalizerPtr a
 
 
@@ -582,21 +582,21 @@ ptrToListIO tweakIO test get next f = go
 -- sense to read the list lazily.  Tere
 tagsToList :: Tags -> IO [Tag]
 tagsToList = ptrToList
-  {#call tags_valid #}
-  {#call tags_get #}
-  {#call tags_move_to_next #}
+  {#call unsafe tags_valid #}
+  {#call unsafe tags_get #}
+  {#call unsafe tags_move_to_next #}
   tagFromCString
 
 threadsToList :: ForeignPtr QueryHandle -> Threads -> IO [Thread mode]
 threadsToList owner = lazyPtrToList
-  {#call threads_valid #}
-  {#call threads_get #}
-  {#call threads_move_to_next #}
+  {#call unsafe threads_valid #}
+  {#call unsafe threads_get #}
+  {#call unsafe threads_move_to_next #}
   (fmap (Thread owner . ThreadHandle) . newForeignPtr thread_destroy <=< detachPtr)
 
 messagesToList :: [ForeignPtr ()] -> Messages -> IO [Message 0 mode]
 messagesToList owners = lazyPtrToList
-  {#call messages_valid #}
-  {#call messages_get #}
-  {#call messages_move_to_next #}
+  {#call unsafe messages_valid #}
+  {#call unsafe messages_get #}
+  {#call unsafe messages_move_to_next #}
   (fmap (Message owners . MessageHandle) . newForeignPtr message_destroy <=< detachPtr)
