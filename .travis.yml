@@ -31,6 +31,18 @@ matrix:
     compiler: "ghc-8.2.1 notmuch-0.25"
     addons: {apt: {packages: [ghc-8.2.1, cabal-install-1.24, alex, happy, g++, libxapian-dev, libgmime-2.6-dev, libtalloc-dev, zlib1g-dev], sources: [hvr-ghc]}}
 
+  - env: CABALVER=1.24 NOTMUCHVER=0.24.2 GHCVER=8.4.1
+    compiler: "ghc-8.4.1 notmuch-0.24.2"
+    addons: {apt: {packages: [ghc-8.4.1, cabal-install-1.24, alex, happy, g++, libxapian-dev, libgmime-2.6-dev, libtalloc-dev, zlib1g-dev], sources: [hvr-ghc]}}
+
+  - env: CABALVER=1.24 NOTMUCHVER=0.25 GHCVER=8.4.1
+    compiler: "ghc-8.4.1 notmuch-0.25"
+    addons: {apt: {packages: [ghc-8.4.1, cabal-install-1.24, alex, happy, g++, libxapian-dev, libgmime-2.6-dev, libtalloc-dev, zlib1g-dev], sources: [hvr-ghc]}}
+
+  allow_failures:
+  - env: CABALVER=1.24 NOTMUCHVER=0.24.2 GHCVER=8.4.1
+  - env: CABALVER=1.24 NOTMUCHVER=0.25 GHCVER=8.4.1
+
 before_install:
 # Using compiler above sets CC to an invalid value, so unset it
 - unset CC
