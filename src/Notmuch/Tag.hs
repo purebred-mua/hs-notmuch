@@ -45,7 +45,7 @@ instance IsString Tag where
 getTag :: Tag -> B.ByteString
 getTag (Tag s) = B.init s  -- trim null byte
 
--- | /O(n) @Just@ a tag, or @Nothing@ if the string is too long
+-- | /O(n)/ @Just@ a tag, or @Nothing@ if the string is too long
 mkTag :: B.ByteString -> Maybe Tag
 mkTag s =
   if w < 1 || w > tagMaxLen
