@@ -20,6 +20,7 @@ module Notmuch.Tag
   , mkTag
   , tagUseAsCString
   , tagFromCString
+  , tagMaxLen
   ) where
 
 import Data.Maybe (fromJust)

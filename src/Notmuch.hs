@@ -49,10 +49,7 @@ The functions that may open file descriptors are:
 -}
 module Notmuch
   (
-    Tag
-  , mkTag
-  , getTag
-  , MessageId
+    MessageId
   , ThreadId
   , ThreadAuthors
   , Author
@@ -95,6 +92,12 @@ module Notmuch
   , messageAddTag
   , messageRemoveTag
   , withFrozenMessage
+
+  -- * Tags
+  , Tag
+  , mkTag
+  , getTag
+  , tagMaxLen
 
   , HasTags(..)
   , HasMessages(..)
