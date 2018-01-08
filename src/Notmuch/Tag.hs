@@ -22,6 +22,8 @@ module Notmuch.Tag
   , tagFromCString
   ) where
 
+import Data.Maybe (fromJust)
+import Data.String (IsString(..))
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Internal as B
 import qualified Data.ByteString.Unsafe as B
@@ -34,6 +36,10 @@ newtype Tag = Tag B.ByteString
 
 instance Show Tag where
   show = show . getTag
+
+-- | Throws exception if not a valid tag.
+instance IsString Tag where
+  fromString = fromJust . mkTag . fromString
 
 -- | /O(1)/
 getTag :: Tag -> B.ByteString
