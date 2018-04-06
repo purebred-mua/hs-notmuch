@@ -258,7 +258,7 @@ messageSetTags l = liftIO . withFrozenMessage (\msg ->
 -- 'withFrozenMessage' to avoid inconsistent states when
 -- adding/removing tags.
 --
-messageAddTag :: (MonadIO m) => Tag -> Message 0 RW -> m ()
+messageAddTag :: (MonadIO m) => Tag -> Message n RW -> m ()
 messageAddTag tag msg = liftIO $ message_add_tag msg tag
 
 -- | Remove the tag from a message.  If adding/removing multiple
@@ -266,7 +266,7 @@ messageAddTag tag msg = liftIO $ message_add_tag msg tag
 -- or use 'withFrozenMessage' to avoid inconsistent states when
 -- adding/removing tags.
 --
-messageRemoveTag :: (MonadIO m) => Tag -> Message 0 RW -> m ()
+messageRemoveTag :: (MonadIO m) => Tag -> Message n RW -> m ()
 messageRemoveTag tag msg = liftIO $ message_remove_tag msg tag
 
 -- | Returns only messages in a thread which are not replies to other messages in the thread.
