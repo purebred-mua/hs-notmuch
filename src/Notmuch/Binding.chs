@@ -14,11 +14,8 @@
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -35,7 +32,7 @@ import Data.Foldable (traverse_)
 import Data.Functor (($>))
 import Data.Functor.Identity (Identity(..))
 import Data.Proxy
-import GHC.TypeLits
+import GHC.TypeLits (Nat, type (<=), type (+), type (-))
 
 import Notmuch.Tag
 import Notmuch.Util
@@ -382,8 +379,8 @@ thread_get_newest_date = flip withThread {#call unsafe thread_get_newest_date #}
 -- and all the copying takes place under 'withThread', so
 -- we don't need to detach the pointer or use a ForeignPtr.
 thread_get_tags :: Thread a -> IO [Tag]
-thread_get_tags ptr = withThread ptr $ \ptr' ->
-  {#call unsafe thread_get_tags #} ptr' >>= tagsToList
+thread_get_tags ptr = withThread ptr $
+  {#call unsafe thread_get_tags #} >=> tagsToList
 
 message_get_message_id :: Message n a -> IO MessageId
 message_get_message_id ptr =
@@ -432,8 +429,8 @@ message_get_header ptr s =
 -- and all the copying takes place under 'withMessage', so
 -- we don't need to detach the pointer or use a ForeignPtr.
 message_get_tags :: Message n a -> IO [Tag]
-message_get_tags ptr = withMessage ptr $ \ptr' ->
-  {#call unsafe message_get_tags #} ptr' >>= tagsToList
+message_get_tags ptr = withMessage ptr $
+  {#call unsafe message_get_tags #} >=> tagsToList
 
 -- According to the header file, possible errors are:
 --
@@ -442,8 +439,8 @@ message_get_tags ptr = withMessage ptr $ \ptr' ->
 -- Therefore assume everything worked!
 --
 message_remove_all_tags :: Message n RW -> IO ()
-message_remove_all_tags msg = withMessage msg $ \ptr ->
-  void $ {#call unsafe message_remove_all_tags #} ptr
+message_remove_all_tags msg = void $ withMessage msg $
+  {#call unsafe message_remove_all_tags #}
 
 -- According to the header file, possible errors are:
 --
@@ -454,9 +451,8 @@ message_remove_all_tags msg = withMessage msg $ \ptr ->
 -- Therefore assume everything worked!
 --
 message_add_tag :: Message n RW -> Tag -> IO ()
-message_add_tag msg tag = withMessage msg $ \ptr ->
-  tagUseAsCString tag $ \s ->
-    void $ {#call unsafe message_add_tag #} ptr s
+message_add_tag msg tag = void $ withMessage msg $
+  tagUseAsCString tag . {#call unsafe message_add_tag #}
 
 -- According to the header file, possible errors are:
 --
@@ -467,9 +463,8 @@ message_add_tag msg tag = withMessage msg $ \ptr ->
 -- Therefore assume everything worked!
 --
 message_remove_tag :: Message n RW -> Tag -> IO ()
-message_remove_tag msg tag = withMessage msg $ \ptr ->
-  tagUseAsCString tag $ \s ->
-    void $ {#call unsafe message_remove_tag #} ptr s
+message_remove_tag msg tag = void $ withMessage msg $
+  tagUseAsCString tag . {#call unsafe message_remove_tag #}
 
 -- According to the header file, possible errors are:
 --
@@ -478,8 +473,7 @@ message_remove_tag msg tag = withMessage msg $ \ptr ->
 -- Therefore assume everything worked!
 --
 message_freeze :: Message n RW -> IO (Message (n + 1) RW)
-message_freeze msg = withMessage msg $ \ptr ->
-  coerce msg <$ {#call unsafe message_freeze #} ptr
+message_freeze msg = withMessage msg {#call unsafe message_freeze #} $> coerce msg
 
 -- According to the header file, possible errors are:
 --
@@ -489,9 +483,8 @@ message_freeze msg = withMessage msg $ \ptr ->
 --
 -- Therefore assume everything worked!
 --
-message_thaw :: (CmpNat n 0 ~ 'GT) => Message n RW -> IO (Message (n - 1) RW)
-message_thaw msg = withMessage msg $ \ptr ->
-  coerce msg <$ {#call unsafe message_thaw #} ptr
+message_thaw :: (1 <= n) => Message n RW -> IO (Message (n - 1) RW)
+message_thaw msg = withMessage msg {#call unsafe message_thaw #} $> coerce msg
 
 -- message_maildir_flags_to_tags
 -- message_tags_to_maildir_flags
