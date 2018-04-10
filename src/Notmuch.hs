@@ -223,7 +223,7 @@ queryCountThreads = query_count_threads
 messageId :: MonadIO m => Message n a -> m MessageId
 messageId = liftIO . message_get_message_id
 
-messageDate :: MonadIO m => Message n a -> m (UTCTime)
+messageDate :: MonadIO m => Message n a -> m UTCTime
 messageDate = liftIO . fmap (posixSecondsToUTCTime . realToFrac) . message_get_date
 
 -- | Get the named header as a UTF-8 encoded string.
@@ -276,7 +276,7 @@ threadToplevelMessages
 threadToplevelMessages = thread_get_toplevel_messages
 
 -- | Returns the date of the newest message in a 'Thread'.
-threadNewestDate :: MonadIO m => Thread a -> m (UTCTime)
+threadNewestDate :: MonadIO m => Thread a -> m UTCTime
 threadNewestDate = liftIO . fmap (posixSecondsToUTCTime . realToFrac) . thread_get_newest_date
 
 -- | Returns the subject of the first message in the query results that belongs to this thread.
@@ -295,20 +295,22 @@ data ThreadAuthors = ThreadAuthors
 
 matchedAuthors :: Lens' ThreadAuthors [Author]
 matchedAuthors f (ThreadAuthors a b) = fmap (\a' -> ThreadAuthors a' b) (f a)
+{-# ANN matchedAuthors ("HLint: ignore Avoid lambda" :: String) #-}
 
 unmatchedAuthors :: Lens' ThreadAuthors [Author]
 unmatchedAuthors f (ThreadAuthors a b) = fmap (\b' -> ThreadAuthors a b') (f b)
+{-# ANN unmatchedAuthors ("HLint: ignore Avoid lambda" :: String) #-}
 
 -- | Return authors of a thread which are split into two groups, both accessible by their optics.
 threadAuthors :: MonadIO m => Thread a -> m ThreadAuthors
 threadAuthors t = do
   a <- liftIO $ thread_get_authors t
-  pure $ maybe (ThreadAuthors [] []) (convert_authors . T.decodeUtf8) a
+  pure $ maybe (ThreadAuthors [] []) (convertAuthors . T.decodeUtf8) a
 
-convert_authors :: T.Text -> ThreadAuthors
-convert_authors raw =
+convertAuthors :: T.Text -> ThreadAuthors
+convertAuthors raw =
   let t = T.breakOn (T.pack "|") raw
-      matched = T.strip <$> (T.splitOn (T.pack ",") $ fst t)
+      matched = T.strip <$> T.splitOn (T.pack ",") (fst t)
       unmatched = filter (not . T.null) (T.splitOn (T.pack "|") $ snd t)
   in ThreadAuthors matched unmatched
 
