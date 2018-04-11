@@ -30,6 +30,7 @@ module Notmuch.Tag
 
 import Data.Hashable (Hashable, hash, hashWithSalt, hashPtrWithSalt)
 import Data.Interned
+import Data.Interned.Internal
 import Data.Maybe (fromJust)
 import Data.String (IsString(..))
 import qualified Data.ByteString as B
@@ -70,10 +71,22 @@ instance Hashable TagPtr where
 instance Interned Tag where
   type Uninterned Tag = TagPtr
   newtype Description Tag = TagDescription TagPtr deriving (Eq, Hashable)
-  describe = TagDescription
+  describe = describeTagPtr
   identify i = Tag i . pinTag
   cacheWidth _ = 32
   cache = tagCache
+
+-- First check for the presense of the key in the cache.
+--
+-- If absent, we need to pin the string (so that the key
+-- data will not be in foreign memory).
+--
+-- If present, we do not
+--
+describeTagPtr :: TagPtr -> Description Tag
+describeTagPtr tagptr =
+  maybe (TagDescription . TagForeign . pinTag $ tagptr) (const $ TagDescription tagptr)
+  $ unsafeDupablePerformIO (recover (TagDescription tagptr))
 
 -- | Return a pinned version of a tag.  If the tag is pinned it is
 -- returned unchanged.  Otherwise it is only safe to use if the
