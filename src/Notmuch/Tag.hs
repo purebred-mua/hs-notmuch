@@ -71,31 +71,19 @@ instance Hashable TagPtr where
 instance Interned Tag where
   type Uninterned Tag = TagPtr
   newtype Description Tag = TagDescription TagPtr deriving (Eq, Hashable)
-  describe = describeTagPtr
-  identify i = Tag i . pinTag
+  describe = TagDescription
+  identify i (TagForeign bs) = Tag i bs
+  identify _ (TagBare _ _) = error "can't intern a CString"
   cacheWidth _ = 32
   cache = tagCache
-
--- First check for the presense of the key in the cache.
---
--- If absent, we need to pin the string (so that the key
--- data will not be in foreign memory).
---
--- If present, we do not
---
-describeTagPtr :: TagPtr -> Description Tag
-describeTagPtr tagptr =
-  maybe (TagDescription . TagForeign . pinTag $ tagptr) (const $ TagDescription tagptr)
-  $ unsafeDupablePerformIO (recover (TagDescription tagptr))
 
 -- | Return a pinned version of a tag.  If the tag is pinned it is
 -- returned unchanged.  Otherwise it is only safe to use if the
 -- referenced memory is live.
 --
-pinTag :: TagPtr -> B.ByteString
-pinTag (TagForeign bs) = bs
-pinTag (TagBare n ptr) =
-  unsafeDupablePerformIO $ B.packCStringLen (ptr, n)
+pinTag :: TagPtr -> IO B.ByteString
+pinTag (TagForeign bs) = pure bs
+pinTag (TagBare n ptr) = B.packCStringLen (ptr, n)
 
 tagCache :: Cache Tag
 tagCache = mkCache
@@ -147,8 +135,13 @@ tagUseAsCString (Tag _ bs) = B.unsafeUseAsCString bs
 tagFromCString :: CString -> IO Tag
 tagFromCString ptr = do
   n <- B.c_strlen ptr
-  let !t = intern $ TagBare (fromIntegral n + 1) ptr
-  pure t
+  let pre = TagBare (fromIntegral n + 1) ptr
+  inCache <- recover (TagDescription pre)
+  case inCache of
+    Just tag -> pure tag
+    Nothing -> do
+      !tag <- intern . TagForeign <$> pinTag pre
+      pure tag
 
 foreign import ccall unsafe "string.h strncmp" c_strncmp
   :: Ptr a -> Ptr b -> CSize -> IO CInt
