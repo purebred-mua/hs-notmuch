@@ -41,7 +41,7 @@ import Notmuch.Util
 {#context prefix = "notmuch" #}
 
 import Foreign
-  ( FinalizerPtr, ForeignPtr, Ptr, castForeignPtr
+  ( ForeignPtr, Ptr, castForeignPtr
   , alloca, newForeignPtr, newForeignPtr_, nullFunPtr, nullPtr, peek
   , touchForeignPtr
   )
@@ -69,11 +69,11 @@ type ThreadId = B.ByteString
 {#enum sort_t as Sort {underscoreToCase} #}
 {#enum message_flag_t as MessageFlag {underscoreToCase} #}
 {#pointer *database_t as DatabaseHandle foreign newtype #}
-{#pointer *query_t as QueryHandle foreign newtype #}
+{#pointer *query_t as QueryHandle foreign finalizer query_destroy newtype #}
 {#pointer *threads_t as Threads newtype #}
-{#pointer *thread_t as ThreadHandle foreign newtype #}
+{#pointer *thread_t as ThreadHandle foreign finalizer thread_destroy newtype #}
 {#pointer *messages_t as Messages newtype #}
-{#pointer *message_t as MessageHandle foreign newtype #}
+{#pointer *message_t as MessageHandle foreign finalizer message_destroy newtype #}
 {#pointer *tags_t as Tags newtype #}
 {#pointer *directory_t as Directory foreign newtype #}
 {#pointer *filenames_t as Filenames foreign newtype #}
@@ -239,7 +239,7 @@ database_find_message_x prep f db@(Database (DatabaseHandle dfp)) s =
       constructF
         (\ptr -> if ptr /= nullPtr then Just ptr else Nothing)
         (fmap (Message [castForeignPtr dfp] . MessageHandle)
-          . (newForeignPtr message_destroy <=< detachPtr))
+          . (newForeignPtr notmuch_message_destroy <=< detachPtr))
         (f db' s')
   )
   >>= throwOr pure
@@ -260,7 +260,7 @@ query_create db s = withCString s $ \s' ->
   withDatabase db $ \db' ->
     {#call unsafe notmuch_query_create #} db' s'
       >>= detachPtr
-      >>= fmap (Query . QueryHandle) . newForeignPtr query_destroy
+      >>= fmap (Query . QueryHandle) . newForeignPtr notmuch_query_destroy
 
 query_get_query_string :: Query a -> IO String
 query_get_query_string ptr =
@@ -493,19 +493,6 @@ message_thaw msg = withMessage msg {#call unsafe message_thaw #} $> coerce msg
 
 -- filenames functions
 
---
--- Destructors
---
-
-foreign import ccall unsafe "&notmuch_query_destroy"
-  query_destroy :: FinalizerPtr a
-
-foreign import ccall unsafe "&notmuch_thread_destroy"
-  thread_destroy :: FinalizerPtr a
-
-foreign import ccall unsafe "&notmuch_message_destroy"
-  message_destroy :: FinalizerPtr a
-
 
 --
 -- UTILITY FUNCTIONS
@@ -577,11 +564,11 @@ threadsToList owner = lazyPtrToList
   {#call unsafe threads_valid #}
   {#call unsafe threads_get #}
   {#call unsafe threads_move_to_next #}
-  (fmap (Thread owner . ThreadHandle) . newForeignPtr thread_destroy <=< detachPtr)
+  (fmap (Thread owner . ThreadHandle) . newForeignPtr notmuch_thread_destroy <=< detachPtr)
 
 messagesToList :: [ForeignPtr ()] -> Messages -> IO [Message 0 mode]
 messagesToList owners = lazyPtrToList
   {#call unsafe messages_valid #}
   {#call unsafe messages_get #}
   {#call unsafe messages_move_to_next #}
-  (fmap (Message owners . MessageHandle) . newForeignPtr message_destroy <=< detachPtr)
+  (fmap (Message owners . MessageHandle) . newForeignPtr notmuch_message_destroy <=< detachPtr)
