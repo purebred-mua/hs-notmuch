@@ -38,6 +38,9 @@ library
     Notmuch.Tag
     Notmuch.Talloc
 
+  include-dirs: cbits
+  c-sources: cbits/wrap_talloc.c
+
   build-depends:
     base >= 4.9 && <5
     , bytestring >= 0.10 && < 0.11

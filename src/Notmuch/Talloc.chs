@@ -17,10 +17,10 @@
 
 module Notmuch.Talloc where
 
-#include <talloc.h>
+#include <wrap_talloc.c>
 
 import Foreign (Ptr, castPtr, nullPtr)
 
 detachPtr :: Ptr a -> IO (Ptr a)
 detachPtr ptr =
-  castPtr <$> {#call unsafe _talloc_steal_loc #} nullPtr (castPtr ptr) nullPtr
+  castPtr <$> {#call unsafe wrap_talloc_steal #} nullPtr (castPtr ptr)
