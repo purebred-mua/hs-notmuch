@@ -542,13 +542,13 @@ lazyPtrToList :: PtrToList
 lazyPtrToList = ptrToListIO System.IO.Unsafe.unsafeInterleaveIO
 
 ptrToListIO :: (forall r. IO r -> IO r) -> PtrToList
-ptrToListIO tweakIO test get next f = go
+ptrToListIO tweakIO test get next f ptr = go
   where
-  go ptr = test ptr >>= \valid -> case valid of
+  go = test ptr >>= \valid -> case valid of
     0 -> pure []
     _ -> (:)
           <$> (get ptr >>= f >>= \x -> next ptr $> x)
-          <*> tweakIO (go ptr)
+          <*> tweakIO go
 
 -- It's assumed that tag lists are short and that it doesn't make
 -- sense to read the list lazily.  Tere
