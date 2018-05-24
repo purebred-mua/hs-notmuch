@@ -527,16 +527,10 @@ type PtrToList =
 
 -- | Strictly read a C iterator into a list.
 --
--- The touch effect is used to keep relevant objects alive for the
--- duration of the iteration.
---
 ptrToList :: PtrToList
 ptrToList = ptrToListIO id
 
 -- | Lazily read a C iterator into a list.
---
--- The touch effect is used to keep relevant objects alive for the
--- duration of the iteration.
 --
 lazyPtrToList :: PtrToList
 lazyPtrToList = ptrToListIO System.IO.Unsafe.unsafeInterleaveIO
