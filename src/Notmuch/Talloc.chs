@@ -23,4 +23,4 @@ import Foreign (Ptr, castPtr, nullPtr)
 
 detachPtr :: Ptr a -> IO (Ptr a)
 detachPtr ptr =
-  castPtr <$> {#call unsafe _talloc_steal_loc #} nullPtr (castPtr ptr) nullPtr
+  castPtr <$> {#call _talloc_steal_loc #} nullPtr (castPtr ptr) nullPtr
