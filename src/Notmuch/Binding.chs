@@ -554,14 +554,14 @@ tagsToList = ptrToList
   tagFromCString
 
 threadsToList :: ForeignPtr QueryHandle -> Threads -> IO [Thread mode]
-threadsToList owner = lazyPtrToList
+threadsToList owner = ptrToList
   {#call threads_valid #}
   {#call threads_get #}
   {#call threads_move_to_next #}
   (fmap (Thread owner . ThreadHandle) . newForeignPtr notmuch_thread_destroy <=< detachPtr)
 
 messagesToList :: [ForeignPtr ()] -> Messages -> IO [Message 0 mode]
-messagesToList owners = lazyPtrToList
+messagesToList owners = ptrToList
   {#call messages_valid #}
   {#call messages_get #}
   {#call messages_move_to_next #}
