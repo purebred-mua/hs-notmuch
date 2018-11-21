@@ -1,7 +1,12 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 module Notmuch.Search where
 
 import Data.Semigroup ((<>))
+import GHC.Generics (Generic)
 
+import Control.DeepSeq (NFData)
 import qualified Data.ByteString.Char8 as C
 
 import Notmuch.Tag (Tag, getTag)
@@ -25,6 +30,7 @@ data SearchTerm
   | Xor SearchTerm SearchTerm
   | Not SearchTerm
   | Bare String
+  deriving (Generic, NFData)
 
 instance Show SearchTerm where
   show (FreeForm s) = s -- TODO quote

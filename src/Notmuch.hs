@@ -14,6 +14,8 @@
 -- You should have received a copy of the GNU General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 
@@ -116,7 +118,9 @@ import Control.Exception (bracket)
 import Control.Monad.Except (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Foldable (traverse_)
+import GHC.Generics (Generic)
 
+import Control.DeepSeq (NFData)
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -291,7 +295,7 @@ data ThreadAuthors = ThreadAuthors
     -- ^ authors matching the query
     , _unmatchedAuthors :: [Author]
     -- ^ non-matched authors
-    } deriving Show
+    } deriving (Show, Generic, NFData)
 
 matchedAuthors :: Lens' ThreadAuthors [Author]
 matchedAuthors f (ThreadAuthors a b) = fmap (\a' -> ThreadAuthors a' b) (f a)

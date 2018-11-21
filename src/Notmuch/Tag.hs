@@ -13,6 +13,8 @@
 -- You should have received a copy of the GNU General Public License
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module Notmuch.Tag
   (
     Tag
@@ -23,6 +25,7 @@ module Notmuch.Tag
   , tagMaxLen
   ) where
 
+import Control.DeepSeq (NFData)
 import Data.Maybe (fromJust)
 import Data.String (IsString(..))
 import qualified Data.ByteString as B
@@ -33,7 +36,7 @@ import Foreign.C (CString)
 import Notmuch.Binding.Constants (tagMaxLen)
 
 newtype Tag = Tag B.ByteString
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, NFData)
 
 instance Show Tag where
   show = show . getTag
