@@ -42,7 +42,7 @@ import Notmuch.Util
 
 import Foreign
   ( ForeignPtr, Ptr, castForeignPtr
-  , alloca, newForeignPtr, newForeignPtr_, nullFunPtr, nullPtr, peek
+  , alloca, newForeignPtr, nullFunPtr, nullPtr, peek
   , touchForeignPtr
   )
 import Foreign.C
@@ -68,7 +68,7 @@ type ThreadId = B.ByteString
 {#enum database_mode_t as DatabaseMode {underscoreToCase} #}
 {#enum sort_t as Sort {underscoreToCase} #}
 {#enum message_flag_t as MessageFlag {underscoreToCase} #}
-{#pointer *database_t as DatabaseHandle foreign newtype #}
+{#pointer *database_t as DatabaseHandle foreign finalizer database_destroy newtype #}
 {#pointer *query_t as QueryHandle foreign finalizer query_destroy newtype #}
 {#pointer *threads_t as Threads newtype #}
 {#pointer *thread_t as ThreadHandle foreign finalizer thread_destroy newtype #}
@@ -101,8 +101,8 @@ type RO = 'DatabaseModeReadOnly
 -- | Convenience synonym for the promoted 'DatabaseModeReadWrite' constructor.
 type RW = 'DatabaseModeReadWrite
 
--- | A database handle.  Use 'databaseDestroy' to close a database
--- (take care not to use any derived objects afterwards!)
+-- | A database handle.  The database will be closed and freed when
+-- it is garbage collected.
 --
 -- Use 'query' to perform a search or 'findMessage' to search for a
 -- particular message.
@@ -155,7 +155,7 @@ withThread (Thread fp a) k = do
   touchForeignPtr fp
   pure r
 
--- | Query object.  Cleaned up when garbate collected.
+-- | Query object.  Cleaned up when garbage collected.
 --
 -- Use 'messages' or 'threads' to get the results.
 --
@@ -163,10 +163,15 @@ withThread (Thread fp a) k = do
 -- write operations on messages derived from it are restricted to
 -- read/write database sessions.
 --
-newtype Query (a :: DatabaseMode) = Query QueryHandle
+data Query (a :: DatabaseMode) = Query
+  {-# UNPACK #-} !(ForeignPtr DatabaseHandle)
+  {-# UNPACK #-} !QueryHandle
 
 withQuery :: Query a -> (Ptr QueryHandle -> IO b) -> IO b
-withQuery (Query a) = withQueryHandle a
+withQuery (Query owner a) f = do
+  r <- withQueryHandle a f
+  touchForeignPtr owner
+  pure r
 
 fromEnum' :: (Enum a, Integral b) => a -> b
 fromEnum' = fromIntegral . fromEnum
@@ -203,7 +208,8 @@ instance Mode 'DatabaseModeReadWrite where
 
 -- | Open a Notmuch database
 --
--- The database has no finaliser and will remain open even if GC'd.
+-- The database will be closed and resources freed when it gets
+-- garbage collected.
 --
 database_open
   :: forall a e m. (AsNotmuchError e, Mode a, MonadError e m, MonadIO m)
@@ -214,21 +220,10 @@ database_open s =
     withCString s (\s' -> (fmap . fmap) runIdentity $
       constructF
         Identity
-        (fmap (Database . DatabaseHandle) . newForeignPtr_)
+        (fmap (Database . DatabaseHandle) . newForeignPtr notmuch_database_destroy)
         ({#call unsafe database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
     ))
   >>= throwOr upgrade
-
-database_destroy :: (AsNotmuchError e, MonadError e m, MonadIO m) => Database a -> m ()
-database_destroy db =
-#if LIBNOTMUCH_CHECK_VERSION(4,1,0)
-  liftIO (
-    toStatus <$> withDatabase db {#call unsafe database_destroy #}
-    >>= status (pure ())
-  ) >>= throwOr pure
-#else
-  liftIO (withDatabase db {#call unsafe database_destroy #})
-#endif
 
 -- notmuch_status_t notmuch_database_compact(path, backup_path, status_cb, closure)
 
@@ -297,11 +292,11 @@ database_get_all_tags ptr = withDatabase ptr $ \ptr' ->
 
 -- TODO: check for NULL, indicating error
 query_create :: Database a -> String -> IO (Query a)
-query_create db s = withCString s $ \s' ->
+query_create db@(Database (DatabaseHandle dfp)) s = withCString s $ \s' ->
   withDatabase db $ \db' ->
     {#call unsafe notmuch_query_create #} db' s'
       >>= detachPtr
-      >>= fmap (Query . QueryHandle) . newForeignPtr notmuch_query_destroy
+      >>= fmap (Query dfp . QueryHandle) . newForeignPtr notmuch_query_destroy
 
 query_get_query_string :: Query a -> IO String
 query_get_query_string ptr =
@@ -324,7 +319,7 @@ query_add_tag_exclude ptr tag = void $
 query_search_threads
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Query a -> m [Thread a]
-query_search_threads q@(Query (QueryHandle qfp)) =
+query_search_threads q@(Query _ (QueryHandle qfp)) =
 #if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   liftIO ( withQuery q $ \qPtr ->
     constructF
@@ -341,7 +336,7 @@ query_search_threads q@(Query (QueryHandle qfp)) =
 query_search_messages
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Query a -> m [Message 0 a]
-query_search_messages q@(Query (QueryHandle qfp)) =
+query_search_messages q@(Query _ (QueryHandle qfp)) =
 #if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   liftIO ( withQuery q $ \qPtr ->
     constructF

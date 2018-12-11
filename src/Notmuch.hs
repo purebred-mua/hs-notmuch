@@ -36,7 +36,6 @@ main = getArgs >>= \\args -> case args of
       'runExceptT' (do
         db <- 'databaseOpen' path
         'query' db ('Bare' expr) >>= 'messages' >>= traverse_ (f ('fromString' tag))
-        'databaseDestroy' db
       ) >>= either (die . (show :: 'Status' -> String)) pure
 @
 
@@ -70,7 +69,6 @@ module Notmuch
   -- * Opening a database
     databaseOpen
   , databaseOpenReadOnly
-  , databaseDestroy
   , databaseVersion
   , Database
   -- ** Database modes
@@ -212,11 +210,13 @@ instance HasThread (Thread a) where
 instance HasThread (Message n a) where
   threadId = liftIO . message_get_thread_id
 
--- | Open a database.  The mode is determined by usage.
--- Because read-only functions also work on read-write databases,
--- 'databaseOpenReadOnly' is also provided for convenience.
+-- | Open a database.  The database will be closed and associated
+-- resources freed upon garbage collection.
 --
--- Use 'databaseDestroy' to close a database and free resources.
+-- The mode is determined by usage.  Because read-only functions
+-- also work on read-write databases, 'databaseOpenReadOnly' is also
+-- provided for convenience.
+--
 databaseOpen
   :: (Mode a, AsNotmuchError e, MonadError e m, MonadIO m)
   => FilePath -> m (Database a)
@@ -227,16 +227,6 @@ databaseOpenReadOnly
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
    => FilePath -> m (Database RO)
 databaseOpenReadOnly = database_open
-
--- | Close the database and free associated resources
---
--- Don't use any resources derived from this database
--- after using this function!
---
-databaseDestroy
-  :: (AsNotmuchError e, MonadError e m, MonadIO m)
-  => Database a -> m ()
-databaseDestroy = database_destroy
 
 -- | Database format version of the given database.
 databaseVersion :: MonadIO m => Database a -> m Int

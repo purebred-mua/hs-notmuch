@@ -39,5 +39,4 @@ main = getArgs >>= \args -> case args of
       runExceptT (do
         db <- databaseOpen dbDir
         query db (Bare searchTerm) >>= messages >>= traverse_ (f (fromString tag))
-        databaseDestroy db
       ) >>= either (die . (show :: Status -> String)) pure
