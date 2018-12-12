@@ -146,13 +146,15 @@ withMessage (Message owners a) k = do
 -- read/write database sessions.
 --
 data Thread (a :: DatabaseMode) = Thread
+  {-# UNPACK #-} !(ForeignPtr DatabaseHandle {- owner -})
   {-# UNPACK #-} !(ForeignPtr QueryHandle {- owner -})
   {-# UNPACK #-} !ThreadHandle
 
 withThread :: Thread a -> (Ptr ThreadHandle -> IO b) -> IO b
-withThread (Thread fp a) k = do
+withThread (Thread dfp qfp a) k = do
   r <- withThreadHandle a k
-  touchForeignPtr fp
+  touchForeignPtr dfp
+  touchForeignPtr qfp
   pure r
 
 -- | Query object.  Cleaned up when garbage collected.
@@ -319,35 +321,36 @@ query_add_tag_exclude ptr tag = void $
 query_search_threads
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Query a -> m [Thread a]
-query_search_threads q@(Query _ (QueryHandle qfp)) =
+query_search_threads q@(Query dfp (QueryHandle qfp)) =
 #if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   liftIO ( withQuery q $ \qPtr ->
     constructF
       Identity
-      (threadsToList qfp)
+      (threadsToList dfp qfp)
       ({#call unsafe query_search_threads #} qPtr)
   )
   >>= throwOr (pure . runIdentity)
 #else
   liftIO $ withQuery q $ \qPtr ->
-    {#call unsafe query_search_threads #} qPtr >>= threadsToList qfp
+    {#call unsafe query_search_threads #} qPtr >>= threadsToList dfp qfp
 #endif
 
 query_search_messages
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Query a -> m [Message 0 a]
-query_search_messages q@(Query _ (QueryHandle qfp)) =
+query_search_messages q@(Query dfp (QueryHandle qfp)) =
 #if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   liftIO ( withQuery q $ \qPtr ->
     constructF
       Identity
-      (messagesToList [castForeignPtr qfp])
+      (messagesToList [castForeignPtr dfp, castForeignPtr qfp])
       ({#call unsafe query_search_messages #} qPtr)
   )
   >>= throwOr (pure . runIdentity)
 #else
   liftIO $ withQuery q $ \qPtr ->
-    {#call unsafe query_search_messages #} qPtr >>= messagesToList [castForeignPtr qfp]
+    {#call unsafe query_search_messages #} qPtr
+    >>= messagesToList [castForeignPtr dfp, castForeignPtr qfp]
 #endif
 
 query_count_x
@@ -385,16 +388,16 @@ thread_get_total_messages ptr =
   fromIntegral <$> withThread ptr ({#call unsafe thread_get_total_messages #})
 
 thread_get_toplevel_messages :: MonadIO m => Thread a -> m [Message 0 a]
-thread_get_toplevel_messages t@(Thread _ (ThreadHandle tfp))
+thread_get_toplevel_messages t@(Thread dfp qfp (ThreadHandle tfp))
   = liftIO $ withThread t $ \ptr ->
     {#call unsafe thread_get_toplevel_messages #} ptr
-      >>= messagesToList [castForeignPtr tfp]
+    >>= messagesToList [castForeignPtr dfp, castForeignPtr qfp, castForeignPtr tfp]
 
 thread_get_messages :: MonadIO m => Thread a -> m [Message 0 a]
-thread_get_messages t@(Thread _ (ThreadHandle tfp))
+thread_get_messages t@(Thread dfp qfp (ThreadHandle tfp))
   = liftIO $ withThread t $ \ptr ->
     {#call unsafe thread_get_messages #} ptr
-      >>= messagesToList [castForeignPtr tfp]
+    >>= messagesToList [castForeignPtr dfp, castForeignPtr qfp, castForeignPtr tfp]
 
 -- notmuch_thread_get_matched_messages -> Int
 
@@ -589,12 +592,16 @@ tagsToList = ptrToList
   {#call unsafe tags_move_to_next #}
   tagFromCString
 
-threadsToList :: ForeignPtr QueryHandle -> Threads -> IO [Thread mode]
-threadsToList owner = lazyPtrToList
+threadsToList
+  :: ForeignPtr DatabaseHandle
+  -> ForeignPtr QueryHandle
+  -> Threads
+  -> IO [Thread mode]
+threadsToList dfp qfp = lazyPtrToList
   {#call unsafe threads_valid #}
   {#call unsafe threads_get #}
   {#call unsafe threads_move_to_next #}
-  (fmap (Thread owner . ThreadHandle) . newForeignPtr notmuch_thread_destroy <=< detachPtr)
+  (fmap (Thread dfp qfp . ThreadHandle) . newForeignPtr notmuch_thread_destroy <=< detachPtr)
 
 messagesToList :: [ForeignPtr ()] -> Messages -> IO [Message 0 mode]
 messagesToList owners = lazyPtrToList
