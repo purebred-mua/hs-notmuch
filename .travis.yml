@@ -44,15 +44,15 @@ before_cache:
 #
 matrix:
   include:
-    - compiler: "ghc-8.6.1"
-      env: NOTMUCHVER=0.24.2 GHCHEAD=true
-      addons: {apt: {packages: [ghc-ppa-tools,cabal-install-head,ghc-8.6.1,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
-    - compiler: "ghc-8.6.1"
-      env: NOTMUCHVER=0.27 GHCHEAD=true
-      addons: {apt: {packages: [ghc-ppa-tools,cabal-install-head,ghc-8.6.1,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
-    - compiler: "ghc-8.6.1"
-      env: NOTMUCHVER=git GHCHEAD=true
-      addons: {apt: {packages: [ghc-ppa-tools,cabal-install-head,ghc-8.6.1,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
+    - compiler: "ghc-8.6.3"
+      env: NOTMUCHVER=0.24.2
+      addons: {apt: {packages: [ghc-ppa-tools,cabal-install-head,ghc-8.6.3,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
+    - compiler: "ghc-8.6.3"
+      env: NOTMUCHVER=0.28
+      addons: {apt: {packages: [ghc-ppa-tools,cabal-install-head,ghc-8.6.3,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
+    - compiler: "ghc-8.6.3"
+      env: NOTMUCHVER=git
+      addons: {apt: {packages: [ghc-ppa-tools,cabal-install-head,ghc-8.6.3,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
 
     - compiler: "ghc-8.4.3"
       env: NOTMUCHVER=0.24.2
@@ -65,6 +65,9 @@ matrix:
       addons: {apt: {packages: [ghc-ppa-tools,cabal-install-2.2,ghc-8.4.3,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
     - compiler: "ghc-8.4.3"
       env: NOTMUCHVER=0.27
+      addons: {apt: {packages: [ghc-ppa-tools,cabal-install-2.2,ghc-8.4.3,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
+    - compiler: "ghc-8.4.3"
+      env: NOTMUCHVER=0.28
       addons: {apt: {packages: [ghc-ppa-tools,cabal-install-2.2,ghc-8.4.3,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
     - compiler: "ghc-8.4.3"
       env: NOTMUCHVER=git
@@ -74,7 +77,7 @@ matrix:
       env: NOTMUCHVER=0.24.2
       addons: {apt: {packages: [ghc-ppa-tools,cabal-install-2.2,ghc-8.2.2,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
     - compiler: "ghc-8.2.2"
-      env: NOTMUCHVER=0.27
+      env: NOTMUCHVER=0.28
       addons: {apt: {packages: [ghc-ppa-tools,cabal-install-2.2,ghc-8.2.2,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
 
     - compiler: "ghc-8.0.2"
@@ -88,6 +91,9 @@ matrix:
       addons: {apt: {packages: [ghc-ppa-tools,cabal-install-2.2,ghc-8.0.2,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
     - compiler: "ghc-8.0.2"
       env: NOTMUCHVER=0.27
+      addons: {apt: {packages: [ghc-ppa-tools,cabal-install-2.2,ghc-8.0.2,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
+    - compiler: "ghc-8.0.2"
+      env: NOTMUCHVER=0.28
       addons: {apt: {packages: [ghc-ppa-tools,cabal-install-2.2,ghc-8.0.2,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
     - compiler: "ghc-8.0.2"
       env: NOTMUCHVER=git
@@ -97,12 +103,11 @@ matrix:
       env: NOTMUCHVER=0.24.2 GHCHEAD=true
       addons: {apt: {packages: [ghc-ppa-tools,cabal-install-head,ghc-head,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
     - compiler: "ghc-head"
-      env: NOTMUCHVER=0.27 GHCHEAD=true
+      env: NOTMUCHVER=0.28 GHCHEAD=true
       addons: {apt: {packages: [ghc-ppa-tools,cabal-install-head,ghc-head,alex,happy,g++,libxapian-dev,libgmime-2.6-dev,libtalloc-dev,zlib1g-dev], sources: [hvr-ghc]}}
 
   allow_failures:
     - compiler: "ghc-head"
-    - compiler: "ghc-8.6.1"
     - env: NOTMUCHVER=git
 
 before_install:
