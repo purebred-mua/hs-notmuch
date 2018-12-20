@@ -13,7 +13,7 @@ extra-source-files:
   README.rst
 author:              Fraser Tweedale
 maintainer:          frase@frase.id.au
-copyright:           Copyright (C) 2014  Fraser Tweedale
+copyright:           Copyright (C) 2014-2018  Fraser Tweedale
 category:            FFI
 build-type:          Simple
 cabal-version:       >=1.10
