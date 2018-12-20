@@ -26,6 +26,10 @@ source-repository head
   type: git
   location: https://github.com/purebred-mua/hs-notmuch.git
 
+flag demos
+  description: Build demonstration programs
+  default:     False
+
 library
   exposed-modules:
     Notmuch
@@ -60,6 +64,8 @@ library
   default-language:    Haskell2010
 
 executable hs-notmuch-files
+  if !flag(demos)
+    buildable: False
   default-language:    Haskell2010
   hs-source-dirs: tools
   ghc-options: -Wall
@@ -70,6 +76,8 @@ executable hs-notmuch-files
     , notmuch
 
 executable hs-notmuch-tag-message
+  if !flag(demos)
+    buildable: False
   default-language:    Haskell2010
   hs-source-dirs: tools
   ghc-options: -Wall
@@ -81,6 +89,8 @@ executable hs-notmuch-tag-message
     , notmuch
 
 executable hs-notmuch-tag-count
+  if !flag(demos)
+    buildable: False
   default-language:    Haskell2010
   hs-source-dirs: tools
   ghc-options: -Wall
@@ -93,6 +103,8 @@ executable hs-notmuch-tag-count
     , notmuch
 
 executable hs-notmuch-tag-set
+  if !flag(demos)
+    buildable: False
   default-language:    Haskell2010
   hs-source-dirs: tools
   ghc-options: -Wall
