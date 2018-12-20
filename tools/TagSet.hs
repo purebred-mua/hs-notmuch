@@ -20,31 +20,24 @@ Search a notmuch database and print the filenames of each email found.
 
 -}
 
-{-# LANGUAGE LambdaCase #-}
-
 import Control.Monad.Except (runExceptT)
-import qualified Data.ByteString.Char8 as C
 import Data.Foldable (traverse_)
-import Data.Maybe (fromJust)
+import Data.String (fromString)
 import System.Environment (getArgs)
 import System.Exit (die)
 
 import Notmuch
-import Notmuch.Search
 
 
 main :: IO ()
-main = getArgs >>= \case
-  [dbDir, search, '+':tag@(_:_)] -> go dbDir search messageAddTag tag
-  [dbDir, search, '-':tag@(_:_)] -> go dbDir search messageRemoveTag tag
-  _ -> putStrLn "usage: hs-notmuch-tag-set DB-DIR SEARCH-TERM +TAG|-TAG"
+main = getArgs >>= \args -> case args of
+  [dbDir, search, '+':tag] -> go dbDir search tag messageAddTag
+  [dbDir, search, '-':tag] -> go dbDir search tag messageRemoveTag
+  _ -> die "usage: hs-notmuch-tag-set DB-DIR SEARCH-TERM +TAG|-TAG"
   where
-    go dbDir searchTerm f tag =
-      let
-        tag' = fromJust $ mkTag $ C.pack tag
-      in
-        runExceptT (do
-          db <- databaseOpen dbDir
-          query db (Bare searchTerm) >>= messages >>= traverse_ (f tag')
-          databaseDestroy db
-        ) >>= either (die . (show :: Status -> String)) pure
+    go dbDir searchTerm tag f =
+      runExceptT (do
+        db <- databaseOpen dbDir
+        query db (Bare searchTerm) >>= messages >>= traverse_ (f (fromString tag))
+        databaseDestroy db
+      ) >>= either (die . (show :: Status -> String)) pure

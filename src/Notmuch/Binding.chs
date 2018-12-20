@@ -54,10 +54,10 @@ import qualified Data.ByteString as B
 import Notmuch.Talloc
 
 
---
--- Types and type synonyms
---
+-- | @Message-Id@ header value.
 type MessageId = B.ByteString
+
+-- | Thread identifier generated and used by /libnotmuch/.
 type ThreadId = B.ByteString
 
 --
@@ -85,6 +85,7 @@ instance Show Status where
   show a = System.IO.Unsafe.unsafePerformIO $
     {#call unsafe status_to_string #} (fromEnum' a) >>= peekCString
 
+-- | Classy prism for injecting a /libnotmuch/ status code.
 class AsNotmuchError s where
   _NotmuchError :: Prism' s Status
 
@@ -94,17 +95,38 @@ instance AsNotmuchError Status where
 throwOr :: (AsNotmuchError e, MonadError e m) => (a -> m b) -> Either Status a -> m b
 throwOr = either (throwError . review _NotmuchError)
 
--- | Read-only database mode
+-- | Convenience synonym for the promoted 'DatabaseModeReadOnly' constructor.
 type RO = 'DatabaseModeReadOnly
 
--- | Read-write database mode
+-- | Convenience synonym for the promoted 'DatabaseModeReadWrite' constructor.
 type RW = 'DatabaseModeReadWrite
 
+-- | A database handle.  Use 'databaseDestroy' to close a database
+-- (take care not to use any derived objects afterwards!)
+--
+-- Use 'query' to perform a search or 'findMessage' to search for a
+-- particular message.
+--
+-- The @Database@ type carries a phantom for the database mode, which
+-- is propgated to derived 'Query', 'Thread' and 'Message' objects.
+-- This is used to prevent write operations being performed against
+-- a read-only database.
+--
 newtype Database (a :: DatabaseMode) = Database DatabaseHandle
 
 withDatabase :: Database a -> (Ptr DatabaseHandle -> IO b) -> IO b
 withDatabase (Database dbh) = withDatabaseHandle dbh
 
+-- | Message object.  Cleaned up when garbage collected.
+--
+-- The @Message@ type carries a phantom for the database mode, so that
+-- write operations are restricted to read/write database sessions.
+--
+-- There is also a phantom type parameter for the degree of frozenness
+-- of the message.  Tag operations on a frozen message are atomic, only
+-- becoming visible to other threads/processes after the thaw.  The
+-- freeze/thaw behaviour is available via 'withFrozenMessage'.
+--
 data Message (n :: Nat) (a :: DatabaseMode) = Message
                  ![ForeignPtr () {- owners -}]
   {-# UNPACK #-} !MessageHandle
@@ -115,6 +137,14 @@ withMessage (Message owners a) k = do
   traverse_ touchForeignPtr owners
   pure r
 
+-- | Thread object.  Cleaned up when garbage collected.
+--
+-- Use 'messages' to get the messages of a thread.
+--
+-- The @Thread@ type carries a phantom for the database mode, so that
+-- write operations on messages derived from it are restricted to
+-- read/write database sessions.
+--
 data Thread (a :: DatabaseMode) = Thread
   {-# UNPACK #-} !(ForeignPtr QueryHandle {- owner -})
   {-# UNPACK #-} !ThreadHandle
@@ -125,6 +155,14 @@ withThread (Thread fp a) k = do
   touchForeignPtr fp
   pure r
 
+-- | Query object.  Cleaned up when garbate collected.
+--
+-- Use 'messages' or 'threads' to get the results.
+--
+-- The @Query@ type carries a phantom for the database mode, so that
+-- write operations on messages derived from it are restricted to
+-- read/write database sessions.
+--
 newtype Query (a :: DatabaseMode) = Query QueryHandle
 
 withQuery :: Query a -> (Ptr QueryHandle -> IO b) -> IO b
@@ -143,6 +181,8 @@ toStatus :: (Integral a, Enum b) => a -> b
 toStatus = toEnum . fromIntegral
 
 
+-- | This is an internal class whose instances are the promoted
+-- 'DatabaseMode' constructors.
 class Mode a where
   getMode :: Proxy a -> DatabaseMode
   upgrade :: (AsNotmuchError e, MonadError e m, MonadIO m) => Database a -> m (Database a)

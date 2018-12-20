@@ -1,6 +1,11 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 
+{-|
+
+/libnotmuch/ search expressions.  See also @notmuch-search-terms(7)@.
+
+-}
 module Notmuch.Search where
 
 import Data.Semigroup ((<>))
@@ -12,6 +17,11 @@ import qualified Data.ByteString.Char8 as C
 import Notmuch.Tag (Tag, getTag)
 import Notmuch.Binding (MessageId, ThreadId)
 
+-- | Search expression.  Use 'Bare' if you want to use a query
+-- string /as-is/ (see also @notmuch-search-terms(7)@).
+--
+-- Use 'show' to stringify a @SearchTerm@.
+--
 data SearchTerm
   = FreeForm String
   | From String
@@ -32,6 +42,7 @@ data SearchTerm
   | Bare String
   deriving (Generic, NFData)
 
+-- | Stringify a query expression.
 instance Show SearchTerm where
   show (FreeForm s) = s -- TODO quote
   show (From s) = "from:" <> s

@@ -30,7 +30,6 @@ import System.Environment (getArgs)
 import System.Exit (die)
 
 import Notmuch
-import Notmuch.Search
 
 
 main :: IO ()

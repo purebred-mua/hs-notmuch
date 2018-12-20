@@ -23,15 +23,35 @@
 
 High-level interface to the /notmuch/ mail indexer.
 
-Some functions that operate on 'Message' objects cause a file
-descriptor to be opened (indicated below).  The file descriptor is
-automatically closed when the data gets GC'd but when the RTS is
-using a multi-generation collector (the default) it becomes more
-likely to hit /max open files/ limits.  Approaches to avoid this
-scenario include:
+Example program to add/remove a tag on all messages matching a query:
 
-- Avoid using these functions; if you need to open the mail file,
-  open it from Haskell, do the thing, then close it promptly.
+@
+main :: IO ()
+main = getArgs >>= \\args -> case args of
+  [path, expr, \'+\':tag] -> go path expr tag 'messageAddTag'
+  [path, expr, \'-\':tag] -> go path expr tag 'messageRemoveTag'
+  _ -> 'die' "usage: hs-notmuch-tag-set DB-DIR SEARCH-TERM +TAG|-TAG"
+  where
+    go path expr tag f =
+      'runExceptT' (do
+        db <- 'databaseOpen' path
+        'query' db ('Bare' expr) >>= 'messages' >>= traverse_ (f ('fromString' tag))
+        'databaseDestroy' db
+      ) >>= either (die . (show :: 'Status' -> String)) pure
+@
+
+== File descriptor exhaustion
+
+Some 'Message' operations cause the message file to be opened (and
+remain open until the object gets garbage collected):
+
+- 'messageHeader' will open the file to read the headers, except for the
+  @From@, @Subject@ and @Message-Id@ headers which are indexed.
+
+If the RTS is using a multi-generation collector (the default), and if
+you are working with lots of messages, you may hit /max open files/
+limits.  The best way to avoid this is to avoid the scenarios outlined
+above.  Alternative approaches that could help include:
 
 - Use a single-generation collector (build with @-rtsopts@ and run
   with @+RTS -G1@).  This incurs the cost of scanning the entire
@@ -41,31 +61,23 @@ scenario include:
   parallel GC.  By default, major GC will be triggered when the
   program is idle for a certain time.
 
-- Manually execute 'System.Mem.performMajorGC' at appropriate times
+- Manually execute 'System.Mem.performMajorGC' at relevant times
   to ensure that older generations get cleaned up.
-
-The functions that may open file descriptors are:
-
-- 'messageHeader'
 
 -}
 module Notmuch
   (
-    MessageId
-  , ThreadId
-  , ThreadAuthors
-  , Author
-
-  -- * Working with the database
-  , Database
-  , Mode
-  , RO
-  , RW
-  , databaseOpen
+  -- * Opening a database
+    databaseOpen
   , databaseOpenReadOnly
   , databaseDestroy
   , databaseVersion
-  , findMessage
+  , Database
+  -- ** Database modes
+  , Mode
+  , DatabaseMode(..)
+  , RO
+  , RW
 
   -- * Querying the database
   , Query
@@ -73,19 +85,33 @@ module Notmuch
   , queryCountMessages
   , queryCountThreads
 
+  -- ** Search expressions
+  , SearchTerm(..)
+
   -- * Working with threads
+  , HasThread(..)
   , Thread
   , threadToplevelMessages
   , threadNewestDate
   , threadSubject
   , threadAuthors
   , threadTotalMessages
-  -- ** Optics
+
+  -- ** Thread ID
+  , ThreadId
+  , HasThreads(..)
+
+  -- ** Thread authors
+  , ThreadAuthors
+  , Author
   , matchedAuthors
   , unmatchedAuthors
 
   -- * Working with messages
+  , findMessage
+  , HasMessages(..)
   , Message
+  , MessageId
   , messageId
   , messageDate
   , messageHeader
@@ -96,15 +122,11 @@ module Notmuch
   , withFrozenMessage
 
   -- * Tags
+  , HasTags(..)
   , Tag
   , mkTag
   , getTag
   , tagMaxLen
-
-  , HasTags(..)
-  , HasMessages(..)
-  , HasThreads(..)
-  , HasThread(..)
 
   -- * Errors
   , Status(..)
@@ -133,59 +155,68 @@ import Notmuch.Binding.Constants (libnotmuchVersion)
 import Notmuch.Search
 import Notmuch.Util
 
---
--- PUBLIC API
---
-
---
--- Classes
---
-
+-- | Objects with tags
 class HasTags a where
   tags :: MonadIO m => a -> m [Tag]
 
+-- | Get all tags used in the database
 instance HasTags (Database a) where
   tags = liftIO . database_get_all_tags
 
+-- | Get all tags used in a thread
 instance HasTags (Thread a) where
   tags = liftIO . thread_get_tags
 
+-- | Get the tags of a single message
 instance HasTags (Message n a) where
   tags = liftIO . message_get_tags
 
 
+-- | Objects with associated messages.
 class HasMessages a where
   messages
     :: (AsNotmuchError e, MonadError e m, MonadIO m)
     => a mode -> m [Message 0 mode]
 
+-- | Retrieve all messages matching a 'Query'
 instance HasMessages Query where
   messages = query_search_messages
 
+-- | Retrieve the messages in a 'Thread'
 instance HasMessages Thread where
   messages = thread_get_messages
 
+-- | Retrieve the replies to a 'Message'
 instance HasMessages (Message n) where
   messages = message_get_replies
-  -- replies!
 
+-- | Objects with associated threads
 class HasThreads a where
   threads
     :: (AsNotmuchError e, MonadError e m, MonadIO m)
     => a mode -> m [Thread mode]
 
+-- | Retrieve the threads matching a 'Query'
 instance HasThreads Query where
   threads = query_search_threads
 
+-- | Objects with an associated 'ThreadId'
 class HasThread a where
   threadId :: MonadIO m => a -> m ThreadId
 
+-- | Get the 'ThreadId' of a 'Thread'
 instance HasThread (Thread a) where
   threadId = liftIO . thread_get_thread_id
 
+-- | Get the 'ThreadId' of a 'Message'
 instance HasThread (Message n a) where
   threadId = liftIO . message_get_thread_id
 
+-- | Open a database.  The mode is determined by usage.
+-- Because read-only functions also work on read-write databases,
+-- 'databaseOpenReadOnly' is also provided for convenience.
+--
+-- Use 'databaseDestroy' to close a database and free resources.
 databaseOpen
   :: (Mode a, AsNotmuchError e, MonadError e m, MonadIO m)
   => FilePath -> m (Database a)
@@ -207,37 +238,57 @@ databaseDestroy
   => Database a -> m ()
 databaseDestroy = database_destroy
 
+-- | Database format version of the given database.
 databaseVersion :: MonadIO m => Database a -> m Int
 databaseVersion = liftIO . database_get_version
 
+-- | Look for a particular message in the database.
 findMessage
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Database a -> MessageId -> m (Maybe (Message 0 a))
 findMessage = database_find_message
 
+-- | Query the database.  To retrieve results from a @Query@, use
+-- 'threads' or 'messages'.
+--
 query :: (MonadIO m) => Database a -> SearchTerm -> m (Query a)
 query db = liftIO . query_create db . show
 
-queryCountMessages, queryCountThreads
+-- | Count the number of messages matching a query.
+--
+-- Complexity: same as the underlying Xapian search…
+--
+queryCountMessages
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Query a -> m Int
 queryCountMessages = query_count_messages
+
+-- | Count the number of threads matching a query.
+--
+-- __/Θ(n)/ in the number of messages__!
+queryCountThreads
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
+  => Query a -> m Int
 queryCountThreads = query_count_threads
 
+-- | Get the message ID.
 messageId :: MonadIO m => Message n a -> m MessageId
 messageId = liftIO . message_get_message_id
 
+-- | Get the date the message was sent.
 messageDate :: MonadIO m => Message n a -> m UTCTime
 messageDate = liftIO . fmap (posixSecondsToUTCTime . realToFrac) . message_get_date
 
 -- | Get the named header as a UTF-8 encoded string.
 -- Empty string if header is missing or @Nothing@ on error.
 --
--- /May open a file descriptor./
+-- __May open a file descriptor__ that will not be closed until the
+-- message gets garbage collected.
 --
 messageHeader :: MonadIO m => B.ByteString -> Message n a -> m (Maybe B.ByteString)
 messageHeader k = liftIO . flip message_get_header k
 
+-- | Get the filename of the message.
 messageFilename :: MonadIO m => Message n a -> m FilePath
 messageFilename = liftIO . message_get_filename
 
@@ -287,6 +338,7 @@ threadNewestDate = liftIO . fmap (posixSecondsToUTCTime . realToFrac) . thread_g
 threadSubject :: MonadIO m => Thread a -> m B.ByteString
 threadSubject = liftIO . thread_get_subject
 
+-- | Author of a message.
 type Author = T.Text
 
 -- | Authors belonging to messages in a query result of a thread ordered by date.
@@ -297,15 +349,21 @@ data ThreadAuthors = ThreadAuthors
     -- ^ non-matched authors
     } deriving (Show, Generic, NFData)
 
+-- | Lens to matched authors.  See also 'threadAuthors'.
 matchedAuthors :: Lens' ThreadAuthors [Author]
 matchedAuthors f (ThreadAuthors a b) = fmap (\a' -> ThreadAuthors a' b) (f a)
 {-# ANN matchedAuthors ("HLint: ignore Avoid lambda" :: String) #-}
 
+-- | Lens to unmatched authors.  See also 'threadAuthors'.
 unmatchedAuthors :: Lens' ThreadAuthors [Author]
 unmatchedAuthors f (ThreadAuthors a b) = fmap (\b' -> ThreadAuthors a b') (f b)
 {-# ANN unmatchedAuthors ("HLint: ignore Avoid lambda" :: String) #-}
 
--- | Return authors of a thread which are split into two groups, both accessible by their optics.
+-- | Return authors of a thread.  These are split into:
+--
+-- * Authors of messages matching the query (accessible via 'matchedAuthors').
+-- * Authors of non-matching messages (accessible via 'unmatchedAuthors').
+--
 threadAuthors :: MonadIO m => Thread a -> m ThreadAuthors
 threadAuthors t = do
   a <- liftIO $ thread_get_authors t

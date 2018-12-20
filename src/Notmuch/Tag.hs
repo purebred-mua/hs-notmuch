@@ -35,13 +35,23 @@ import Foreign.C (CString)
 
 import Notmuch.Binding.Constants (tagMaxLen)
 
+-- | Message tag.  Use 'mkTag' to construct a tag.  Or use
+-- @-XOverloadedStrings@, but beware that the @IsString@ instance
+-- is non-total.
+--
+-- This data type avoid copying when passing tags to /libnotmuch/.
+-- But copies do occur when reading tags from a database.
+--
+-- A previous experiment with interning showed no benefit.  Tags
+-- are typically very short so the overhead erodes any advantage.
+--
 newtype Tag = Tag B.ByteString
   deriving (Eq, Ord, NFData)
 
 instance Show Tag where
   show = show . getTag
 
--- | Throws exception if not a valid tag.
+-- | Throws exception if the tag is empty or too long.
 instance IsString Tag where
   fromString = fromJust . mkTag . fromString
 
@@ -50,6 +60,9 @@ getTag :: Tag -> B.ByteString
 getTag (Tag s) = B.init s  -- trim null byte
 
 -- | /O(n)/ @Just@ a tag, or @Nothing@ if the string is too long
+--
+-- Use UTF-8 encoding to include non-ASCII characters in a tag.
+--
 mkTag :: B.ByteString -> Maybe Tag
 mkTag s =
   if w < 1 || w > tagMaxLen

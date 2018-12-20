@@ -23,10 +23,12 @@ import Data.Version (Version, makeVersion)
 
 #include <notmuch.h>
 
+-- | The maximum tag length.  Defined as @NOTMUCH_TAG_MAX@ in @notmuch.h@.
 tagMaxLen :: Int
 tagMaxLen = {#const NOTMUCH_TAG_MAX #}
 
--- | The version of /libnotmuch/ that /hs-notmuch/ was built against.
+-- | The version of /libnotmuch/ that /hs-notmuch/ was __built__ against.
+-- (The program could be running against a different version.)
 libnotmuchVersion :: Version
 libnotmuchVersion = makeVersion
   [ {#const LIBNOTMUCH_MAJOR_VERSION #}
