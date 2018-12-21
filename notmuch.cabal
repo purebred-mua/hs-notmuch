@@ -33,12 +33,12 @@ flag demos
 library
   exposed-modules:
     Notmuch
-    Notmuch.Search
     Notmuch.Util
 
   other-modules:
     Notmuch.Binding
     Notmuch.Binding.Constants
+    Notmuch.Search
     Notmuch.Tag
     Notmuch.Talloc
 
