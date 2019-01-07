@@ -330,7 +330,7 @@ threadToplevelMessages
   => Thread a -> m [Message 0 a]
 threadToplevelMessages = thread_get_toplevel_messages
 
--- | Returns the date of the newest message in a 'Thread'.
+-- | /O(1)/ Date of the newest message in a 'Thread'.
 threadNewestDate :: MonadIO m => Thread a -> m UTCTime
 threadNewestDate = liftIO . fmap (posixSecondsToUTCTime . realToFrac) . thread_get_newest_date
 
@@ -376,6 +376,6 @@ convertAuthors raw =
       unmatched = filter (not . T.null) (T.splitOn (T.pack "|") $ snd t)
   in ThreadAuthors matched unmatched
 
--- | All messages in the database belonging to the given 'Thread'.
+-- | /O(1)/ count of messages in the thread.
 threadTotalMessages :: MonadIO m => Thread a -> m Int
 threadTotalMessages = liftIO . thread_get_total_messages
