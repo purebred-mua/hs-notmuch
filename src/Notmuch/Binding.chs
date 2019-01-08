@@ -171,11 +171,12 @@ withQuery (Query a) = withQueryHandle a
 fromEnum' :: (Enum a, Integral b) => a -> b
 fromEnum' = fromIntegral . fromEnum
 
--- | If @StatusSuccess@ then @Right a@ else @Left status@.
+-- | If @e == StatusSuccess@ then apply @Right@ in the given effect,
+-- otherwise return @pure (Left e)@
 --
-status :: Functor f => f a -> Status -> f (Either Status a)
+status :: (Applicative f) => f a -> Status -> f (Either Status a)
 status a StatusSuccess = Right <$> a
-status a e = Left e <$ a
+status _ e = pure $ Left e
 
 toStatus :: (Integral a, Enum b) => a -> b
 toStatus = toEnum . fromIntegral
