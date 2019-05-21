@@ -1,4 +1,4 @@
--- Copyright (C) 2014, 2017  Fraser Tweedale
+-- Copyright (C) 2014-2019  Fraser Tweedale
 --
 -- hs-notmuch is free software: you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License as published by
@@ -182,8 +182,16 @@ fromEnum' = fromIntegral . fromEnum
 -- otherwise return @pure (Left e)@
 --
 status :: (Applicative f) => f a -> Status -> f (Either Status a)
-status a StatusSuccess = Right <$> a
-status _ e = pure $ Left e
+status = status' (== StatusSuccess)
+
+-- | Like 'status'' but with predicate parameter (False if status
+-- should be raised as an error, otherwise True).
+status'
+  :: (Applicative f)
+  => (Status -> Bool) -> f a -> Status -> f (Either Status a)
+status' f a e
+  | f e = Right <$> a
+  | otherwise = pure $ Left e
 
 toStatus :: (Integral a, Enum b) => a -> b
 toStatus = toEnum . fromIntegral
@@ -549,10 +557,23 @@ constructF
   -> (Ptr ptr -> IO CInt)
   -- ^ C double-pointer-style constructor
   -> IO (Either Status (t r))
-constructF mkF dcon constructor =
+constructF = constructF' (== StatusSuccess)
+
+constructF'
+  :: (Storable ptr, Traversable t)
+  => (Status -> Bool)
+  -- ^ Which statuses are considered a "success"?
+  -> (ptr -> t ptr)
+  -- ^ Inspect received pointer and lift it into a Traversable
+  -> (ptr -> IO r)
+  -- ^ Wrap pointer, including attaching finalizers
+  -> (Ptr ptr -> IO CInt)
+  -- ^ C double-pointer-style constructor
+  -> IO (Either Status (t r))
+constructF' test mkF dcon constructor =
   alloca $ \ptr ->
     toEnum . fromIntegral <$> constructor ptr
-    >>= status (traverse dcon . mkF =<< peek ptr)
+    >>= status' test (traverse dcon . mkF =<< peek ptr)
 
 
 type PtrToList =
