@@ -16,7 +16,7 @@
 
 {-
 
-Search a notmuch database and print the filenames of each email found.
+Add or remove a tag from all messages matching query.
 
 -}
 
