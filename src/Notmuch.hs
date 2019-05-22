@@ -110,15 +110,19 @@ module Notmuch
   , findMessage
   , HasMessages(..)
   , Message
+  -- ** Headers
   , MessageId
   , messageId
   , messageDate
   , messageHeader
-  , messageFilename
+  -- ** Tags
   , messageSetTags
   , messageAddTag
   , messageRemoveTag
   , withFrozenMessage
+  -- ** Files
+  , indexFile
+  , messageFilename
 
   -- * Tags
   , HasTags(..)

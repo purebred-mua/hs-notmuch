@@ -245,6 +245,34 @@ database_get_version :: Database a -> IO Int
 database_get_version db =
   fromIntegral <$> withDatabase db {#call unsafe database_get_version #}
 
+-- | Index a file with the default indexing options.
+-- (This binding does not yet provide a way to change
+-- the indexing options.)  Returns the indexed message.
+--
+-- If message has same message ID as another message in the
+-- database, the new filename will be added to the message
+-- and the existing message is returned.
+--
+-- Possible errors include:
+--
+-- * 'StatusFileError' when file does not exist or cannot be opened
+-- * 'StatusFileNotEmail' when file does not look like an email
+--
+indexFile
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
+  => Database RW -> FilePath -> m (Message 0 RW)
+indexFile db@(Database (DatabaseHandle dfp)) path =
+  liftIO (withDatabase db $ \db' ->
+    withCString path $ \path' ->
+      constructF'
+        (\r -> r == StatusSuccess || r == StatusDuplicateMessageId)
+        Identity
+        (fmap (Message [castForeignPtr dfp] . MessageHandle)
+          . (newForeignPtr notmuch_message_destroy <=< detachPtr))
+        ({#call unsafe database_index_file #} db' path' nullPtr)
+  )
+  >>= throwOr (pure . runIdentity)
+
 -- notmuch_database_needs_upgrade ## do automatically for updates
 -- notmuch_database_upgrade ## do automatically for updates
 -- notmuch_database_begin_atomic ## do automatically for updates
