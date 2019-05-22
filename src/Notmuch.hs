@@ -17,6 +17,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 {-|
@@ -284,12 +285,11 @@ messageFilename = liftIO . message_get_filename
 
 -- | Freeze the message, run the given computation
 -- and return the result.  The message is always thawed at the end.
--- (Don't thaw the message as part of the computation!)
 --
 -- Have to start with @Message 0 RW@ due to GHC type system limitation
 -- (type-level Nat is not inductive).
 --
-withFrozenMessage :: (Message 1 RW -> IO a) -> Message 0 RW -> IO a
+withFrozenMessage :: (forall n. Message n RW -> IO a) -> Message 0 RW -> IO a
 withFrozenMessage k msg = bracket (message_freeze msg) message_thaw k
 
 -- | Set tags for the message.  Atomic.
