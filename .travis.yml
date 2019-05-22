@@ -42,6 +42,11 @@ before_cache:
 # OLDEST GHC:     8.0
 # OLDEST NOTMUCH: 0.26[.2]
 #
+# NOTE about notmuch >= 0.29.  libgmime >= 3.0 is required.
+# It is available in Ubuntu bionic (18.04 LTS) but not earlier
+# supported versions.  Travis does not yet support bionic, so
+# 0.29 must remain in allowed_failures.
+#
 matrix:
   include:
     - compiler: "ghc-8.6.5"
