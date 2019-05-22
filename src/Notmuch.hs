@@ -121,8 +121,10 @@ module Notmuch
   , messageRemoveTag
   , withFrozenMessage
   -- ** Files
-  , indexFile
   , messageFilename
+  , indexFile
+  , removeFile
+  , RemoveResult(..)
 
   -- * Tags
   , HasTags(..)

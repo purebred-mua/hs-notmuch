@@ -273,16 +273,40 @@ indexFile db@(Database (DatabaseHandle dfp)) path =
   )
   >>= throwOr (pure . runIdentity)
 
+-- | Result of a 'removeFile' operation.
+data RemoveResult = MessageRemoved | MessagePersists
+  deriving (Eq, Show)
+
+-- | Remove a message filename.  If the message has no more
+-- filenames return 'MessageRemoved', otherwise 'MessagePersists'.
+--
+-- The underlying routine (as of notmuch v0.28) returns
+-- @NOTMUCH_STATUS_SUCCESS@ even when the given path does not
+-- exist, is not an internet message, or is not recorded in the
+-- database.  Therefore @removeFile@ also returns 'MessageRemoved'
+-- in this scenario.  This is particularly confusing when the
+-- @Message-Id@ of the given file is known, but the the file itself
+-- is unknown.
+--
+removeFile
+  :: (AsNotmuchError e, MonadError e m, MonadIO m)
+  => Database RW -> FilePath -> m RemoveResult
+removeFile db path =
+  liftIO (withDatabase db $ \db' ->
+    withCString path $ \path' ->
+      toStatus <$> {#call unsafe database_remove_message #} db' path'
+  )
+  >>= \e -> case e of
+    StatusSuccess -> pure MessageRemoved
+    StatusDuplicateMessageId -> pure MessagePersists
+    _ -> throwError $ review _NotmuchError e
+
 -- notmuch_database_needs_upgrade ## do automatically for updates
 -- notmuch_database_upgrade ## do automatically for updates
 -- notmuch_database_begin_atomic ## do automatically for updates
 -- notmuch_database_end_atomic ## do automatically for updates
 
 -- notmuch_database_get_directory
-
--- notmuch_database_add_message
-
--- notmuch_database_remove_message
 
 database_find_message
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
