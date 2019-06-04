@@ -70,6 +70,7 @@ module Notmuch
   -- * Opening a database
     databaseOpen
   , databaseOpenReadOnly
+  , databasePath
   , databaseVersion
   , Database
   -- ** Database modes

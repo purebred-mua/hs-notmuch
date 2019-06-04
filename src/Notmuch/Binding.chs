@@ -241,6 +241,10 @@ database_get_path :: Database a -> IO FilePath
 database_get_path db =
   withDatabase db {#call unsafe database_get_path #} >>= peekCString
 
+-- | Get the path of the database
+databasePath :: Database a -> FilePath
+databasePath = System.IO.Unsafe.unsafePerformIO . database_get_path
+
 database_get_version :: Database a -> IO Int
 database_get_version db =
   fromIntegral <$> withDatabase db {#call unsafe database_get_version #}
