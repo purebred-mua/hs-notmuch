@@ -24,15 +24,17 @@
 
 module Notmuch.Binding where
 
-import Control.Monad ((>=>), (<=<), void)
+import Control.Monad ((>=>), (<=<), void, when)
 import Control.Monad.Except (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Coerce (coerce)
 import Data.Foldable (traverse_)
 import Data.Functor (($>))
 import Data.Functor.Identity (Identity(..))
+import Data.List (isPrefixOf)
 import Data.Proxy
 import GHC.TypeLits (Nat, type (<=), type (+), type (-))
+import System.FilePath (addTrailingPathSeparator, isAbsolute, splitPath)
 
 import Notmuch.Tag
 import Notmuch.Util
@@ -259,6 +261,9 @@ database_get_version db =
 --
 -- Possible errors include:
 --
+-- * 'StatusPathError' if file path is not absolute or is not an
+--    extension of the database path.  This check is performed in
+--    this binding, not in the foreign /libnotmuch/ code.
 -- * 'StatusFileError' when file does not exist or cannot be opened
 -- * 'StatusFileNotEmail' when file does not look like an email
 --
@@ -266,7 +271,8 @@ indexFile
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Database RW -> FilePath -> m (Message 0 RW)
 indexFile db@(Database (DatabaseHandle dfp)) path =
-  liftIO (withDatabase db $ \db' ->
+  when (not validPath) (throwError (review _NotmuchError StatusPathError))
+  *> liftIO (withDatabase db $ \db' ->
     withCString path $ \path' ->
       constructF'
         (\r -> r == StatusSuccess || r == StatusDuplicateMessageId)
@@ -276,6 +282,11 @@ indexFile db@(Database (DatabaseHandle dfp)) path =
         ({#call unsafe database_index_file #} db' path' nullPtr)
   )
   >>= throwOr (pure . runIdentity)
+  where
+    validPath =
+      isAbsolute path
+      && splitPath (addTrailingPathSeparator (databasePath db))
+          `isPrefixOf` splitPath path
 
 -- | Result of a 'removeFile' operation.
 data RemoveResult = MessageRemoved | MessagePersists
