@@ -42,11 +42,13 @@ import Notmuch.Util
 #include <notmuch.h>
 {#context prefix = "notmuch" #}
 
+import Control.Concurrent.MVar
 import Foreign
-  ( ForeignPtr, Ptr, castForeignPtr
+  ( FinalizerPtr, ForeignPtr, Ptr, castForeignPtr
   , alloca, newForeignPtr, nullFunPtr, nullPtr, peek
   , touchForeignPtr
   )
+import qualified Foreign.Concurrent
 import Foreign.C
 import Foreign.Storable (Storable)
 import qualified System.IO.Unsafe
@@ -232,7 +234,7 @@ database_open s =
     withCString s (\s' -> (fmap . fmap) runIdentity $
       constructF
         Identity
-        (fmap (Database . DatabaseHandle) . newForeignPtr notmuch_database_destroy)
+        (fmap (Database . DatabaseHandle) . newForeignPtrLocked notmuch_database_destroy)
         ({#call unsafe database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
     ))
   >>= throwOr upgrade
@@ -273,12 +275,12 @@ indexFile
 indexFile db@(Database (DatabaseHandle dfp)) path =
   when (not validPath) (throwError (review _NotmuchError StatusPathError))
   *> liftIO (withDatabase db $ \db' ->
-    withCString path $ \path' ->
+    withTallocLock $ withCString path $ \path' ->
       constructF'
         (\r -> r == StatusSuccess || r == StatusDuplicateMessageId)
         Identity
         (fmap (Message [castForeignPtr dfp] . MessageHandle)
-          . (newForeignPtr notmuch_message_destroy <=< detachPtr))
+          . (newForeignPtrLocked notmuch_message_destroy <=< detachPtr))
         ({#call unsafe database_index_file #} db' path' nullPtr)
   )
   >>= throwOr (pure . runIdentity)
@@ -348,11 +350,11 @@ database_find_message_x
   -> m (Maybe (Message 0 a))
 database_find_message_x prep f db@(Database (DatabaseHandle dfp)) s =
   liftIO (withDatabase db $ \db' ->
-    prep s $ \s' ->
+    withTallocLock $ prep s $ \s' ->
       constructF
         (\ptr -> if ptr /= nullPtr then Just ptr else Nothing)
         (fmap (Message [castForeignPtr dfp] . MessageHandle)
-          . (newForeignPtr notmuch_message_destroy <=< detachPtr))
+          . (newForeignPtrLocked notmuch_message_destroy <=< detachPtr))
         (f db' s')
   )
   >>= throwOr pure
@@ -370,10 +372,10 @@ database_get_all_tags ptr = withDatabase ptr $ \ptr' ->
 -- TODO: check for NULL, indicating error
 query_create :: Database a -> String -> IO (Query a)
 query_create db@(Database (DatabaseHandle dfp)) s = withCString s $ \s' ->
-  withDatabase db $ \db' ->
+  withTallocLock $ withDatabase db $ \db' ->
     {#call unsafe notmuch_query_create #} db' s'
       >>= detachPtr
-      >>= fmap (Query dfp . QueryHandle) . newForeignPtr notmuch_query_destroy
+      >>= fmap (Query dfp . QueryHandle) . newForeignPtrLocked notmuch_query_destroy
 
 query_get_query_string :: Query a -> IO String
 query_get_query_string ptr =
@@ -662,14 +664,16 @@ ptrToList = ptrToListIO id
 lazyPtrToList :: PtrToList
 lazyPtrToList = ptrToListIO System.IO.Unsafe.unsafeInterleaveIO
 
+-- | @test@, @get@, @next@ and @f@ are executed in the talloc mutex.
 ptrToListIO :: (forall r. IO r -> IO r) -> PtrToList
 ptrToListIO tweakIO test get next f ptr = go
   where
-  go = test ptr >>= \valid -> case valid of
-    0 -> pure []
+  go = takeMVar tallocLock *> test ptr >>= \valid -> case valid of
+    0 -> putMVar tallocLock () *> pure []
     _ -> (:)
           <$> (get ptr >>= f >>= \x -> next ptr $> x)
-          <*> tweakIO go
+          <* putMVar tallocLock () *> tweakIO go
+          --FIXME we can do (no-lazy) ptrToList in one single withTallocLock
 
 -- It's assumed that tag lists are short and that it doesn't make
 -- sense to read the list lazily.  Tere
@@ -689,11 +693,25 @@ threadsToList dfp qfp = lazyPtrToList
   {#call unsafe threads_valid #}
   {#call unsafe threads_get #}
   {#call unsafe threads_move_to_next #}
-  (fmap (Thread dfp qfp . ThreadHandle) . newForeignPtr notmuch_thread_destroy <=< detachPtr)
+  (fmap (Thread dfp qfp . ThreadHandle) . newForeignPtrLocked notmuch_thread_destroy <=< detachPtr)
 
 messagesToList :: [ForeignPtr ()] -> Messages -> IO [Message 0 mode]
 messagesToList owners = lazyPtrToList
   {#call unsafe messages_valid #}
   {#call unsafe messages_get #}
   {#call unsafe messages_move_to_next #}
-  (fmap (Message owners . MessageHandle) . newForeignPtr notmuch_message_destroy <=< detachPtr)
+  (fmap (Message owners . MessageHandle) . newForeignPtrLocked notmuch_message_destroy <=< detachPtr)
+
+
+foreign import ccall "wrapper"
+  wrap :: (Ptr a -> IO ()) -> IO (FinalizerPtr a)
+
+foreign import ccall "dynamic"
+  unwrap :: FinalizerPtr a -> (Ptr a -> IO ())
+
+newForeignPtrLocked :: FinalizerPtr a -> Ptr a -> IO (ForeignPtr a)
+newForeignPtrLocked f ptr =
+  Foreign.Concurrent.newForeignPtr ptr (destroyLocked f ptr)
+
+destroyLocked :: FinalizerPtr a -> Ptr a -> IO ()
+destroyLocked f ptr = withTallocLock $ unwrap f ptr

@@ -20,7 +20,22 @@ module Notmuch.Talloc where
 #include <talloc.h>
 
 import Foreign (Ptr, castPtr, nullPtr)
+import Control.Concurrent.MVar
+import System.IO.Unsafe
 
 detachPtr :: Ptr a -> IO (Ptr a)
 detachPtr ptr =
   castPtr <$> {#call unsafe _talloc_steal_loc #} nullPtr (castPtr ptr) nullPtr
+
+
+tallocLock :: MVar ()
+tallocLock = unsafePerformIO $ newMVar ()
+{-# NOINLINE tallocLock #-}
+
+-- | Perform the action in the talloc mutex
+withTallocLock :: IO a -> IO a
+withTallocLock go = do
+  takeMVar tallocLock
+  r <- go
+  putMVar tallocLock ()
+  pure r
