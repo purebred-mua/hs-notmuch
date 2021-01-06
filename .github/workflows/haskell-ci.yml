@@ -18,13 +18,15 @@ on:
   - pull_request
 jobs:
   linux:
-    name: Haskell-CI Linux - GHC ${{ matrix.ghc }}
+    name: GHC ${{ matrix.ghc }} - notmuch ${{ matrix.notmuch }}
     runs-on: ubuntu-18.04
     container:
       image: buildpack-deps:bionic
     continue-on-error: ${{ matrix.allow-failure }}
     strategy:
       matrix:
+        ghc: ["8.6.5", "8.4.4", "8.2.2", "8.0.2"]
+        notmuch: ["0.26.2", "0.27", "0.28.4", "git"]
         include:
           - ghc: 8.6.5
             allow-failure: false
