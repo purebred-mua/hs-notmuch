@@ -28,6 +28,8 @@ import System.Exit (die)
 
 import Notmuch
 
+{-# ANN module "HLint: ignore Use lambda-case" #-}
+
 
 main :: IO ()
 main = getArgs >>= \args -> case args of

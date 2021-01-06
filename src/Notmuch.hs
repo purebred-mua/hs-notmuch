@@ -349,7 +349,7 @@ data ThreadAuthors = ThreadAuthors
 -- | Lens to matched authors.  See also 'threadAuthors'.
 matchedAuthors :: Lens' ThreadAuthors [Author]
 matchedAuthors f (ThreadAuthors a b) = fmap (\a' -> ThreadAuthors a' b) (f a)
-{-# ANN matchedAuthors ("HLint: ignore Avoid lambda" :: String) #-}
+{-# ANN matchedAuthors ("HLint: ignore Avoid lambda using `infix`" :: String) #-}
 
 -- | Lens to unmatched authors.  See also 'threadAuthors'.
 unmatchedAuthors :: Lens' ThreadAuthors [Author]
