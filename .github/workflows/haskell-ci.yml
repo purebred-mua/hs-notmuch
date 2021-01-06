@@ -47,6 +47,27 @@ jobs:
           apt-get install -y ghc-$GHC_VERSION cabal-install-3.2 alex g++ happy libgmime-2.6-dev libtalloc-dev libxapian-dev zlib1g-dev
         env:
           GHC_VERSION: ${{ matrix.ghc }}
+      - name: cache /tmp/libnotmuch
+        id: cache-notmuch
+        uses: actions/cache@v2
+        with:
+          key: ${{ runner.os }}-notmuch-${{ matrix.notmuch }}
+          path: /tmp/notmuch
+      - name: build libnotmuch
+        if: steps.cache-notmuch.outputs.cache-hit != 'true'
+        env:
+          NOTMUCHVER: ${{ matrix.notmuch }}
+        run: |
+          mkdir -p /tmp/notmuch
+          if [ "$NOTMUCHVER" = "git" ]; then
+            git clone https://git.notmuchmail.org/git/notmuch /tmp/notmuch
+          else
+            curl -L https://notmuchmail.org/releases/notmuch-$NOTMUCHVER.tar.gz | tar xz --wildcards --strip-components=1 -C /tmp/notmuch
+          fi
+          (cd /tmp/notmuch && ./configure --prefix=/usr --without-emacs --without-ruby && make)
+      - name: install libnotmuch
+        run: |
+          (cd /tmp/notmuch && make install)
       - name: Set PATH and environment variables
         run: |
           echo "$HOME/.cabal/bin" >> $GITHUB_PATH
