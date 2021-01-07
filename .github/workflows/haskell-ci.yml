@@ -18,13 +18,14 @@ on:
   - pull_request
 jobs:
   linux:
-    name: Haskell-CI Linux - GHC ${{ matrix.ghc }}
+    name: GHC ${{ matrix.ghc }} - notmuch ${{ matrix.notmuch }}
     runs-on: ubuntu-18.04
     container:
       image: buildpack-deps:bionic
     continue-on-error: ${{ matrix.allow-failure }}
     strategy:
       matrix:
+        notmuch: ["0.26.2", "0.27", "0.28.4", "0.29.3", "0.30", "0.31.3", "git"]
         ghc:
           - 8.10.3
           - 8.8.4
@@ -56,6 +57,28 @@ jobs:
           apt-get install -y ghc-$GHC_VERSION cabal-install-3.2 alex g++ happy libgmime-3.0-dev libtalloc-dev libxapian-dev zlib1g-dev
         env:
           GHC_VERSION: ${{ matrix.ghc }}
+      - name: cache /tmp/libnotmuch
+        id: cache-notmuch
+        uses: actions/cache@v2
+        with:
+          key: ${{ runner.os }}-notmuch-${{ matrix.notmuch }}
+          path: /tmp/notmuch
+      - name: build libnotmuch
+        if: steps.cache-notmuch.outputs.cache-hit != 'true'
+        env:
+          NOTMUCHVER: ${{ matrix.notmuch }}
+        run: |
+          mkdir -p /tmp/notmuch
+          if [ "$NOTMUCHVER" = "git" ]; then
+            git clone https://git.notmuchmail.org/git/notmuch /tmp/notmuch
+          else
+            (curl -L https://notmuchmail.org/releases/notmuch-$NOTMUCHVER.tar.gz | tar xz --wildcards --strip-components=1 -C /tmp/notmuch) \
+            || (curl -L https://notmuchmail.org/releases/notmuch-$NOTMUCHVER.tar.xz | tar xJ --wildcards --strip-components=1 -C /tmp/notmuch)
+          fi
+          (cd /tmp/notmuch && ./configure --prefix=/usr --without-emacs --without-ruby && make)
+      - name: install libnotmuch
+        run: |
+          (cd /tmp/notmuch && make install)
       - name: Set PATH and environment variables
         run: |
           echo "$HOME/.cabal/bin" >> $GITHUB_PATH
