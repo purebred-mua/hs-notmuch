@@ -1,0 +1,47 @@
+commit ab9e0005e1aac454560dc3611a0a707dd573c381 (HEAD -> ci)
+Author: Fraser Tweedale <frase@frase.id.au>
+Date:   Thu Jan 7 11:52:22 2021 +1000
+
+    ci: apply libnotmuch changes
+
+diff --git a/.github/workflows/haskell-ci.yml b/.github/workflows/haskell-ci.yml
+index ced92dd..f101b01 100644
+--- a/.github/workflows/haskell-ci.yml
++++ b/.github/workflows/haskell-ci.yml
+@@ -19,3 +19,3 @@ on:
+ jobs:
+   linux:
+-    name: Haskell-CI Linux - GHC ${{ matrix.ghc }}
++    name: GHC ${{ matrix.ghc }} - notmuch ${{ matrix.notmuch }}
+@@ -26,3 +26,4 @@ jobs:
+     strategy:
+       matrix:
++        notmuch: ["0.26.2", "0.27", "0.28.4", "0.29.3", "0.30", "0.31.3", "git"]
+         ghc:
+@@ -57,4 +58,26 @@ jobs:
+         env:
+           GHC_VERSION: ${{ matrix.ghc }}
++      - name: cache /tmp/libnotmuch
++        id: cache-notmuch
++        uses: actions/cache@v2
++        with:
++          key: ${{ runner.os }}-notmuch-${{ matrix.notmuch }}
++          path: /tmp/notmuch
++      - name: build libnotmuch
++        if: steps.cache-notmuch.outputs.cache-hit != 'true'
++        env:
++          NOTMUCHVER: ${{ matrix.notmuch }}
++        run: |
++          mkdir -p /tmp/notmuch
++          if [ "$NOTMUCHVER" = "git" ]; then
++            git clone https://git.notmuchmail.org/git/notmuch /tmp/notmuch
++          else
++            (curl -L https://notmuchmail.org/releases/notmuch-$NOTMUCHVER.tar.gz | tar xz --wildcards --strip-components=1 -C /tmp/notmuch) \
++            || (curl -L https://notmuchmail.org/releases/notmuch-$NOTMUCHVER.tar.xz | tar xJ --wildcards --strip-components=1 -C /tmp/notmuch)
++          fi
++          (cd /tmp/notmuch && ./configure --prefix=/usr --without-emacs --without-ruby && make)
++      - name: install libnotmuch
++        run: |
++          (cd /tmp/notmuch && make install)
+       - name: Set PATH and environment variables
+         run: |
