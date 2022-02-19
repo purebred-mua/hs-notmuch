@@ -72,6 +72,7 @@ module Notmuch
   , databaseOpenReadOnly
   , databasePath
   , databaseVersion
+  , databaseRevision
   , Database
   -- ** Database modes
   , Mode
@@ -146,6 +147,7 @@ import Control.Exception (bracket)
 import Control.Monad.Except (MonadError(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Foldable (traverse_)
+import Foreign.C.Types (CULong)
 import GHC.Generics (Generic)
 
 import Control.DeepSeq (NFData)
@@ -239,6 +241,17 @@ databaseOpenReadOnly = database_open
 -- | Database format version of the given database.
 databaseVersion :: MonadIO m => Database a -> m Int
 databaseVersion = liftIO . database_get_version
+
+-- | Get the revision and UUID of the database.
+--
+-- The revision number increases monotonically with each commit to
+-- the database (although rollover is possible).  The "UUID" is an
+-- __opaque__ string that persists until e.g. database compaction.
+-- Revision numbers are only comparable where the UUID strings are
+-- equal.
+--
+databaseRevision :: MonadIO m => Database a -> m (CULong, String)
+databaseRevision = liftIO . database_get_revision
 
 -- | Look for a particular message in the database.
 findMessage
