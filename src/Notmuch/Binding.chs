@@ -251,6 +251,14 @@ database_get_version :: Database a -> IO Int
 database_get_version db =
   fromIntegral <$> withDatabase db {#call unsafe database_get_version #}
 
+database_get_revision :: Database a -> IO (CULong, String)
+database_get_revision db =
+  withDatabase db $ \db' ->
+    alloca $ \uuidPtr -> do
+      rev <- {#call unsafe database_get_revision #} db' uuidPtr
+      uuid <- peekCString =<< peek uuidPtr
+      pure (rev, uuid)
+
 -- | Index a file with the default indexing options.
 -- (This binding does not yet provide a way to change
 -- the indexing options.)  Returns the indexed message.

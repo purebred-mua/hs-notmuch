@@ -102,6 +102,15 @@ executable hs-notmuch-files
   build-depends:
     , notmuch
 
+executable hs-notmuch-dbinfo
+  import: common
+  if !flag(demos)
+    buildable: False
+  hs-source-dirs: tools
+  main-is: DbInfo.hs
+  build-depends:
+    , notmuch
+
 executable hs-notmuch-tag-message
   import: common
   if !flag(demos)
