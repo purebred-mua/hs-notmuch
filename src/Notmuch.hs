@@ -72,6 +72,7 @@ module Notmuch
   , databaseOpenReadOnly
   , databasePath
   , databaseVersion
+  , databaseRevision
   , Database
   -- ** Database modes
   , Mode
@@ -154,6 +155,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+import Data.Int (Int64)
 
 import Notmuch.Tag
 import Notmuch.Binding
@@ -239,6 +241,10 @@ databaseOpenReadOnly = database_open
 -- | Database format version of the given database.
 databaseVersion :: MonadIO m => Database a -> m Int
 databaseVersion = liftIO . database_get_version
+
+-- | Get the revision and UUID of the database
+databaseRevision :: MonadIO m => Database a -> m (Int64, String)
+databaseRevision = liftIO . database_get_revision
 
 -- | Look for a particular message in the database.
 findMessage

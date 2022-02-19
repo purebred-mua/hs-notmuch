@@ -32,6 +32,7 @@ import Data.Foldable (traverse_)
 import Data.Functor (($>))
 import Data.Functor.Identity (Identity(..))
 import Data.List (isPrefixOf)
+import Data.Int (Int64)
 import Data.Proxy
 import GHC.TypeLits (Nat, type (<=), type (+), type (-))
 import System.FilePath (addTrailingPathSeparator, isAbsolute, splitPath)
@@ -250,6 +251,13 @@ databasePath = System.IO.Unsafe.unsafePerformIO . database_get_path
 database_get_version :: Database a -> IO Int
 database_get_version db =
   fromIntegral <$> withDatabase db {#call unsafe database_get_version #}
+
+database_get_revision :: Database a -> IO (Int64, String)
+database_get_revision db =
+  alloca (\puuid ->
+            (\rev uuid -> (fromIntegral rev, uuid)) <$>
+            withDatabase db (flip {#call unsafe database_get_revision #} puuid) <*>
+            (peek puuid >>= peekCString))
 
 -- | Index a file with the default indexing options.
 -- (This binding does not yet provide a way to change
