@@ -18,7 +18,7 @@ on:
   - pull_request
 jobs:
   linux:
-    name: Haskell-CI - Linux - ${{ matrix.compiler }}
+    name: Haskell-CI - Linux - ${{ matrix.compiler }} - notmuch ${{ matrix.notmuch }}
     runs-on: ubuntu-20.04
     timeout-minutes:
       60
@@ -27,6 +27,17 @@ jobs:
     continue-on-error: ${{ matrix.allow-failure }}
     strategy:
       matrix:
+        notmuch: ["0.26.2", "0.27", "0.28.4", "0.29.3", "0.30", "0.31.3", "git"]
+        compiler:
+          - ghc-9.4.0.20220523
+          - ghc-9.2.3
+          - ghc-9.0.2
+          - ghc-8.10.7
+          - ghc-8.8.4
+          - ghc-8.6.5
+          - ghc-8.4.4
+          - ghc-8.2.2
+          - ghc-8.0.2
         include:
           - compiler: ghc-9.4.0.20220523
             compilerKind: ghc
@@ -101,6 +112,28 @@ jobs:
           HCKIND: ${{ matrix.compilerKind }}
           HCNAME: ${{ matrix.compiler }}
           HCVER: ${{ matrix.compilerVersion }}
+      - name: cache /tmp/libnotmuch
+        id: cache-notmuch
+        uses: actions/cache@v2
+        with:
+          key: ${{ runner.os }}-notmuch-${{ matrix.notmuch }}
+          path: /tmp/notmuch
+      - name: build libnotmuch
+        if: steps.cache-notmuch.outputs.cache-hit != 'true'
+        env:
+          NOTMUCHVER: ${{ matrix.notmuch }}
+        run: |
+          mkdir -p /tmp/notmuch
+          if [ "$NOTMUCHVER" = "git" ]; then
+            git clone https://git.notmuchmail.org/git/notmuch /tmp/notmuch
+          else
+            (curl -L https://notmuchmail.org/releases/notmuch-$NOTMUCHVER.tar.gz | tar xz --wildcards --strip-components=1 -C /tmp/notmuch) \
+            || (curl -L https://notmuchmail.org/releases/notmuch-$NOTMUCHVER.tar.xz | tar xJ --wildcards --strip-components=1 -C /tmp/notmuch)
+          fi
+          (cd /tmp/notmuch && ./configure --prefix=/usr --without-emacs --without-ruby && make)
+      - name: install libnotmuch
+        run: |
+          (cd /tmp/notmuch && make install)
       - name: Set PATH and environment variables
         run: |
           echo "$HOME/.cabal/bin" >> $GITHUB_PATH
