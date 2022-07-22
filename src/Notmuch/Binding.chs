@@ -233,7 +233,7 @@ database_open s =
       constructF
         Identity
         (fmap (Database . DatabaseHandle) . newForeignPtr notmuch_database_destroy)
-        ({#call unsafe database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
+        ({#call database_open #} s' (fromEnum' (getMode (Proxy :: Proxy a))))
     ))
   >>= throwOr upgrade
 
