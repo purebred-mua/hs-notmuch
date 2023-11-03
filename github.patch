@@ -1,0 +1,38 @@
+diff --git a/.github/workflows/haskell-ci.yml b/.github/workflows/haskell-ci.yml
+index a302af8..89c746f 100644
+--- a/.github/workflows/haskell-ci.yml
++++ b/.github/workflows/haskell-ci.yml
+@@ -19,3 +19,3 @@ on:
+ jobs:
+   linux:
+-    name: Haskell-CI - Linux - ${{ matrix.compiler }}
++    name: Haskell-CI - Linux - ${{ matrix.compiler }} - notmuch ${{ matrix.notmuch }}
+@@ -112,6 +112,28 @@ jobs:
+           HCKIND: ${{ matrix.compilerKind }}
+           HCNAME: ${{ matrix.compiler }}
+           HCVER: ${{ matrix.compilerVersion }}
++      - name: cache /tmp/libnotmuch
++        id: cache-notmuch
++        uses: actions/cache@v2
++        with:
++          key: ${{ runner.os }}-notmuch-${{ matrix.notmuch }}
++          path: /tmp/notmuch
++      - name: build libnotmuch
++        if: steps.cache-notmuch.outputs.cache-hit != 'true'
++        env:
++          NOTMUCHVER: ${{ matrix.notmuch }}
++        run: |
++          mkdir -p /tmp/notmuch
++          if [ "$NOTMUCHVER" = "git" ]; then
++            git clone https://git.notmuchmail.org/git/notmuch /tmp/notmuch
++          else
++            (curl -L https://notmuchmail.org/releases/notmuch-$NOTMUCHVER.tar.gz | tar xz --wildcards --strip-components=1 -C /tmp/notmuch) \
++            || (curl -L https://notmuchmail.org/releases/notmuch-$NOTMUCHVER.tar.xz | tar xJ --wildcards --strip-components=1 -C /tmp/notmuch)
++          fi
++          (cd /tmp/notmuch && ./configure --prefix=/usr --without-emacs --without-ruby && make)
++      - name: install libnotmuch
++        run: |
++          (cd /tmp/notmuch && make install)
+       - name: Set PATH and environment variables
+         run: |
+           echo "$HOME/.cabal/bin" >> $GITHUB_PATH
