@@ -76,6 +76,18 @@ executable hs-notmuch-files
     , mtl
     , notmuch
 
+executable hs-notmuch-dbinfo
+  if !flag(demos)
+    buildable: False
+  default-language:    Haskell2010
+  hs-source-dirs: tools
+  ghc-options: -Wall
+  main-is: DbInfo.hs
+  build-depends:
+    base         >= 4.9
+    , mtl
+    , notmuch
+
 executable hs-notmuch-tag-message
   if !flag(demos)
     buildable: False
