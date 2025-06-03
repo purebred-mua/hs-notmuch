@@ -322,9 +322,7 @@ messageRemoveTag :: (MonadIO m) => Tag -> Message n RW -> m ()
 messageRemoveTag tag msg = liftIO $ message_remove_tag msg tag
 
 -- | Returns only messages in a thread which are not replies to other messages in the thread.
-threadToplevelMessages
-  :: (AsNotmuchError e, MonadError e m, MonadIO m)
-  => Thread a -> m [Message 0 a]
+threadToplevelMessages :: (MonadIO m) => Thread a -> m [Message 0 a]
 threadToplevelMessages = thread_get_toplevel_messages
 
 -- | /O(1)/ Date of the newest message in a 'Thread'.
