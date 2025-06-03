@@ -98,7 +98,6 @@ executable hs-notmuch-files
   if !flag(demos)
     buildable: False
   hs-source-dirs: tools
-  ghc-options: -Wall
   main-is: Files.hs
   build-depends:
     , notmuch
@@ -108,7 +107,6 @@ executable hs-notmuch-tag-message
   if !flag(demos)
     buildable: False
   hs-source-dirs: tools
-  ghc-options: -Wall
   main-is: TagMessage.hs
   build-depends:
     , bytestring
@@ -119,10 +117,8 @@ executable hs-notmuch-tag-count
   if !flag(demos)
     buildable: False
   hs-source-dirs: tools
-  ghc-options: -Wall
   main-is: TagCount.hs
   build-depends:
-    , bytestring
     , containers
     , notmuch
 
@@ -131,10 +127,8 @@ executable hs-notmuch-tag-set
   if !flag(demos)
     buildable: False
   hs-source-dirs: tools
-  ghc-options: -Wall
   main-is: TagSet.hs
   build-depends:
-    , bytestring
     , notmuch
 
 executable hs-notmuch-index-file
@@ -142,7 +136,6 @@ executable hs-notmuch-index-file
   if !flag(demos)
     buildable: False
   hs-source-dirs: tools
-  ghc-options: -Wall
   main-is: IndexFile.hs
   build-depends:
     , notmuch
