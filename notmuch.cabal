@@ -84,8 +84,8 @@ library
     , time
     , text
 
-  build-tools:
-    c2hs >= 0.19.1
+  build-tool-depends:
+    c2hs:c2hs >= 0.19.1
 
   extra-libraries:
     notmuch
