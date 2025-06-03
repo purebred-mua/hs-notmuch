@@ -8,7 +8,6 @@
 -}
 module Notmuch.Search where
 
-import Data.Semigroup ((<>))
 import GHC.Generics (Generic)
 
 import Control.DeepSeq (NFData)

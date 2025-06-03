@@ -82,30 +82,6 @@ jobs:
             setup-method: ghcup
             allow-failure: false
             notmuch: 0.31.4
-          - compiler: ghc-8.6.5
-            compilerKind: ghc
-            compilerVersion: 8.6.5
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.31.4
-          - compiler: ghc-8.4.4
-            compilerKind: ghc
-            compilerVersion: 8.4.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.31.4
-          - compiler: ghc-8.2.2
-            compilerKind: ghc
-            compilerVersion: 8.2.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.31.4
-          - compiler: ghc-8.0.2
-            compilerKind: ghc
-            compilerVersion: 8.0.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.31.4
           - compiler: ghc-9.12.2
             compilerKind: ghc
             compilerVersion: 9.12.2
@@ -157,30 +133,6 @@ jobs:
           - compiler: ghc-8.8.4
             compilerKind: ghc
             compilerVersion: 8.8.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.32.3
-          - compiler: ghc-8.6.5
-            compilerKind: ghc
-            compilerVersion: 8.6.5
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.32.3
-          - compiler: ghc-8.4.4
-            compilerKind: ghc
-            compilerVersion: 8.4.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.32.3
-          - compiler: ghc-8.2.2
-            compilerKind: ghc
-            compilerVersion: 8.2.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.32.3
-          - compiler: ghc-8.0.2
-            compilerKind: ghc
-            compilerVersion: 8.0.2
             setup-method: ghcup
             allow-failure: false
             notmuch: 0.32.3
@@ -238,30 +190,6 @@ jobs:
             setup-method: ghcup
             allow-failure: false
             notmuch: 0.33.2
-          - compiler: ghc-8.6.5
-            compilerKind: ghc
-            compilerVersion: 8.6.5
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.33.2
-          - compiler: ghc-8.4.4
-            compilerKind: ghc
-            compilerVersion: 8.4.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.33.2
-          - compiler: ghc-8.2.2
-            compilerKind: ghc
-            compilerVersion: 8.2.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.33.2
-          - compiler: ghc-8.0.2
-            compilerKind: ghc
-            compilerVersion: 8.0.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.33.2
           - compiler: ghc-9.12.2
             compilerKind: ghc
             compilerVersion: 9.12.2
@@ -313,30 +241,6 @@ jobs:
           - compiler: ghc-8.8.4
             compilerKind: ghc
             compilerVersion: 8.8.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.34.3
-          - compiler: ghc-8.6.5
-            compilerKind: ghc
-            compilerVersion: 8.6.5
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.34.3
-          - compiler: ghc-8.4.4
-            compilerKind: ghc
-            compilerVersion: 8.4.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.34.3
-          - compiler: ghc-8.2.2
-            compilerKind: ghc
-            compilerVersion: 8.2.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.34.3
-          - compiler: ghc-8.0.2
-            compilerKind: ghc
-            compilerVersion: 8.0.2
             setup-method: ghcup
             allow-failure: false
             notmuch: 0.34.3
@@ -394,30 +298,6 @@ jobs:
             setup-method: ghcup
             allow-failure: false
             notmuch: "0.35"
-          - compiler: ghc-8.6.5
-            compilerKind: ghc
-            compilerVersion: 8.6.5
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.35"
-          - compiler: ghc-8.4.4
-            compilerKind: ghc
-            compilerVersion: 8.4.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.35"
-          - compiler: ghc-8.2.2
-            compilerKind: ghc
-            compilerVersion: 8.2.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.35"
-          - compiler: ghc-8.0.2
-            compilerKind: ghc
-            compilerVersion: 8.0.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.35"
           - compiler: ghc-9.12.2
             compilerKind: ghc
             compilerVersion: 9.12.2
@@ -469,30 +349,6 @@ jobs:
           - compiler: ghc-8.8.4
             compilerKind: ghc
             compilerVersion: 8.8.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.36"
-          - compiler: ghc-8.6.5
-            compilerKind: ghc
-            compilerVersion: 8.6.5
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.36"
-          - compiler: ghc-8.4.4
-            compilerKind: ghc
-            compilerVersion: 8.4.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.36"
-          - compiler: ghc-8.2.2
-            compilerKind: ghc
-            compilerVersion: 8.2.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.36"
-          - compiler: ghc-8.0.2
-            compilerKind: ghc
-            compilerVersion: 8.0.2
             setup-method: ghcup
             allow-failure: false
             notmuch: "0.36"
@@ -550,30 +406,6 @@ jobs:
             setup-method: ghcup
             allow-failure: false
             notmuch: "0.37"
-          - compiler: ghc-8.6.5
-            compilerKind: ghc
-            compilerVersion: 8.6.5
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.37"
-          - compiler: ghc-8.4.4
-            compilerKind: ghc
-            compilerVersion: 8.4.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.37"
-          - compiler: ghc-8.2.2
-            compilerKind: ghc
-            compilerVersion: 8.2.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.37"
-          - compiler: ghc-8.0.2
-            compilerKind: ghc
-            compilerVersion: 8.0.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.37"
           - compiler: ghc-9.12.2
             compilerKind: ghc
             compilerVersion: 9.12.2
@@ -625,30 +457,6 @@ jobs:
           - compiler: ghc-8.8.4
             compilerKind: ghc
             compilerVersion: 8.8.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.38.3
-          - compiler: ghc-8.6.5
-            compilerKind: ghc
-            compilerVersion: 8.6.5
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.38.3
-          - compiler: ghc-8.4.4
-            compilerKind: ghc
-            compilerVersion: 8.4.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.38.3
-          - compiler: ghc-8.2.2
-            compilerKind: ghc
-            compilerVersion: 8.2.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: 0.38.3
-          - compiler: ghc-8.0.2
-            compilerKind: ghc
-            compilerVersion: 8.0.2
             setup-method: ghcup
             allow-failure: false
             notmuch: 0.38.3
@@ -706,30 +514,6 @@ jobs:
             setup-method: ghcup
             allow-failure: false
             notmuch: "0.39"
-          - compiler: ghc-8.6.5
-            compilerKind: ghc
-            compilerVersion: 8.6.5
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.39"
-          - compiler: ghc-8.4.4
-            compilerKind: ghc
-            compilerVersion: 8.4.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.39"
-          - compiler: ghc-8.2.2
-            compilerKind: ghc
-            compilerVersion: 8.2.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.39"
-          - compiler: ghc-8.0.2
-            compilerKind: ghc
-            compilerVersion: 8.0.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: "0.39"
           - compiler: ghc-9.12.2
             compilerKind: ghc
             compilerVersion: 9.12.2
@@ -781,30 +565,6 @@ jobs:
           - compiler: ghc-8.8.4
             compilerKind: ghc
             compilerVersion: 8.8.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: git
-          - compiler: ghc-8.6.5
-            compilerKind: ghc
-            compilerVersion: 8.6.5
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: git
-          - compiler: ghc-8.4.4
-            compilerKind: ghc
-            compilerVersion: 8.4.4
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: git
-          - compiler: ghc-8.2.2
-            compilerKind: ghc
-            compilerVersion: 8.2.2
-            setup-method: ghcup
-            allow-failure: false
-            notmuch: git
-          - compiler: ghc-8.0.2
-            compilerKind: ghc
-            compilerVersion: 8.0.2
             setup-method: ghcup
             allow-failure: false
             notmuch: git
@@ -813,7 +573,7 @@ jobs:
       - name: apt-get install
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends gnupg ca-certificates dirmngr curl git software-properties-common libtinfo5 libnuma-dev
+          apt-get install -y --no-install-recommends gnupg ca-certificates dirmngr curl git software-properties-common libtinfo5
           apt-get install -y alex g++ happy libgmime-3.0-dev libtalloc-dev libxapian-dev zlib1g-dev
       - name: Install GHCup
         run: |
@@ -957,8 +717,8 @@ jobs:
           touch cabal.project
           touch cabal.project.local
           echo "packages: ${PKGDIR_notmuch}" >> cabal.project
-          if [ $((HCNUMVER >= 80200)) -ne 0 ] ; then echo "package notmuch" >> cabal.project ; fi
-          if [ $((HCNUMVER >= 80200)) -ne 0 ] ; then echo "    ghc-options: -Werror=missing-methods" >> cabal.project ; fi
+          echo "package notmuch" >> cabal.project
+          echo "    ghc-options: -Werror=missing-methods" >> cabal.project
           cat >> cabal.project <<EOF
           EOF
           if $HEADHACKAGE; then
