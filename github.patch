@@ -13,7 +13,7 @@ index a302af8..89c746f 100644
            HCVER: ${{ matrix.compilerVersion }}
 +      - name: cache /tmp/libnotmuch
 +        id: cache-notmuch
-+        uses: actions/cache@v2
++        uses: actions/cache@v4
 +        with:
 +          key: ${{ runner.os }}-notmuch-${{ matrix.notmuch }}
 +          path: /tmp/notmuch
