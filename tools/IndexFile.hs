@@ -22,7 +22,8 @@ Index or remove the given file.
 
 {-# LANGUAGE LambdaCase #-}
 
-import Control.Monad.Except ((>=>), runExceptT)
+import Control.Monad ((>=>))
+import Control.Monad.Except (runExceptT)
 import System.Environment (getArgs)
 import System.Exit (die)
 
