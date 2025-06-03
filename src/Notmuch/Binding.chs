@@ -397,7 +397,6 @@ query_search_threads
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Query a -> m [Thread a]
 query_search_threads q@(Query dfp (QueryHandle qfp)) =
-#if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   liftIO ( withQuery q $ \qPtr ->
     constructF
       Identity
@@ -405,16 +404,11 @@ query_search_threads q@(Query dfp (QueryHandle qfp)) =
       ({#call unsafe query_search_threads #} qPtr)
   )
   >>= throwOr (pure . runIdentity)
-#else
-  liftIO $ withQuery q $ \qPtr ->
-    {#call unsafe query_search_threads #} qPtr >>= threadsToList dfp qfp
-#endif
 
 query_search_messages
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
   => Query a -> m [Message 0 a]
 query_search_messages q@(Query dfp (QueryHandle qfp)) =
-#if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   liftIO ( withQuery q $ \qPtr ->
     constructF
       Identity
@@ -422,31 +416,18 @@ query_search_messages q@(Query dfp (QueryHandle qfp)) =
       ({#call unsafe query_search_messages #} qPtr)
   )
   >>= throwOr (pure . runIdentity)
-#else
-  liftIO $ withQuery q $ \qPtr ->
-    {#call unsafe query_search_messages #} qPtr
-    >>= messagesToList [castForeignPtr dfp, castForeignPtr qfp]
-#endif
 
 query_count_x
   :: (AsNotmuchError e, MonadError e m, MonadIO m)
-#if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   => (Ptr QueryHandle -> Ptr CUInt -> IO CInt)
-#else
-  => (Ptr QueryHandle -> IO CUInt)
-#endif
   -> Query a -> m Int
 query_count_x f q = fmap fromIntegral $
-#if LIBNOTMUCH_CHECK_VERSION(5,0,0)
   liftIO (
     withQuery q $ \qPtr ->
       alloca $ \intPtr ->
         toStatus <$> f qPtr intPtr
         >>= status (peek intPtr)
   ) >>= throwOr pure
-#else
-  liftIO $ withQuery q f
-#endif
 
 query_count_messages, query_count_threads
   :: (AsNotmuchError e, MonadError e m, MonadIO m) => Query a -> m Int
